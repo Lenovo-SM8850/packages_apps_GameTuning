@@ -1,0 +1,177 @@
+// SPDX-License-Identifier: Apache-2.0
+package io.github.miner7222.gametuning.service
+
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.IBinder
+import android.os.Looper
+import android.os.RemoteException
+import android.os.ServiceManager
+import android.os.ServiceSpecificException
+import android.util.Log
+import android.widget.Toast
+import io.github.miner7222.gametuning.R
+import io.github.miner7222.gametuning.data.DisplayControl
+import io.github.miner7222.gametuning.data.GameTuningRepository
+import kotlinx.coroutines.runBlocking
+import vendor.lenovo.hardware.gametuning.IGameTuning
+import vendor.lenovo.hardware.gametuning.ISessionListener
+
+/**
+ * Follows game sessions for the whole user. It registers a session listener with the tuning daemon,
+ * shows a short notice when a session is being recorded and reapplies the refresh-rate floor on
+ * session or mode changes. Started at boot, again when the app is replaced and whenever the app
+ * opens; it registers again when the daemon restarts.
+ */
+class SessionService : Service() {
+    private val worker = HandlerThread("GameTuningSession")
+    private lateinit var handler: Handler
+    private val main = Handler(Looper.getMainLooper())
+
+    // Everything below belongs to the worker thread.
+    private var daemon: IGameTuning? = null
+    private var daemonBinder: IBinder? = null
+    private var retryDelayMs = RETRY_MIN_MS
+    private var noticeFor: String? = null
+
+    private val listener = object : ISessionListener.Stub() {
+        override fun onSessionChanged(userId: Int, packageName: String?, mode: Int, active: Boolean, recording: Boolean) {
+            val pkg = packageName ?: return
+            if (userId != this@SessionService.userId) return
+            handler.post { onSession(pkg, mode, active, recording) }
+        }
+
+        override fun getInterfaceVersion(): Int = ISessionListener.VERSION
+
+        override fun getInterfaceHash(): String = ISessionListener.HASH
+    }
+
+    private val death = IBinder.DeathRecipient {
+        handler.post {
+            Log.w(TAG, "The tuning daemon died, registering again")
+            daemon = null
+            daemonBinder = null
+            noticeFor = null
+            scheduleConnect(RETRY_MIN_MS)
+        }
+    }
+
+    private val connectTask = Runnable { connect() }
+
+    override fun onCreate() {
+        super.onCreate()
+        worker.start()
+        handler = Handler(worker.looper)
+        handler.post(connectTask)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        handler.post(connectTask)
+        return START_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        handler.post {
+            try {
+                daemonBinder?.unlinkToDeath(death, 0)
+                daemon?.unregisterSessionListener(listener)
+            } catch (_: RuntimeException) {
+            } catch (_: RemoteException) {
+            }
+            worker.quitSafely()
+        }
+        super.onDestroy()
+    }
+
+    private fun scheduleConnect(delayMs: Long) {
+        handler.removeCallbacks(connectTask)
+        handler.postDelayed(connectTask, delayMs)
+        retryDelayMs = (retryDelayMs * 2).coerceAtMost(RETRY_MAX_MS)
+    }
+
+    /** Registers the listener; a failed attempt is retried with a growing delay. */
+    private fun connect() {
+        if (daemon != null) return
+        try {
+            if (!ServiceManager.isDeclared(GameTuningRepository.NAME)) {
+                stopSelf()
+                return
+            }
+            val binder = ServiceManager.checkService(GameTuningRepository.NAME)
+            if (binder == null) {
+                scheduleConnect(retryDelayMs)
+                return
+            }
+            val svc = IGameTuning.Stub.asInterface(binder)
+            binder.linkToDeath(death, 0)
+            try {
+                svc.registerSessionListener(listener)
+            } catch (e: Exception) {
+                runCatching { binder.unlinkToDeath(death, 0) }
+                throw e
+            }
+            daemon = svc
+            daemonBinder = binder
+            retryDelayMs = RETRY_MIN_MS
+        } catch (e: RemoteException) {
+            Log.w(TAG, "Cannot register the session listener: ${e.message}")
+            scheduleConnect(retryDelayMs)
+        } catch (e: ServiceSpecificException) {
+            Log.w(TAG, "The daemon refused the session listener: ${e.message}")
+            scheduleConnect(retryDelayMs)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Not allowed to register the session listener: ${e.message}")
+            scheduleConnect(retryDelayMs)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Cannot reach the tuning daemon: ${e.message}")
+            scheduleConnect(retryDelayMs)
+        }
+    }
+
+    private fun onSession(pkg: String, mode: Int, active: Boolean, recording: Boolean) {
+        if (!active) {
+            if (noticeFor == pkg) noticeFor = null
+            return
+        }
+        applySessionRefresh(pkg, mode)
+        // A profile change inside a session repeats the event; the notice shows once per session.
+        if (recording && noticeFor != pkg) {
+            noticeFor = pkg
+            main.post { Toast.makeText(applicationContext, R.string.rec_toast, Toast.LENGTH_SHORT).show() }
+        } else if (!recording && noticeFor == pkg) {
+            noticeFor = null
+        }
+    }
+
+    private fun applySessionRefresh(pkg: String, mode: Int) {
+        try {
+            runBlocking {
+                DisplayControl(this@SessionService).applyRefresh(pkg, mode)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not apply the session refresh rate", e)
+        }
+    }
+
+    companion object {
+        private const val TAG = "GameTuningSession"
+        private const val RETRY_MIN_MS = 2_000L
+        private const val RETRY_MAX_MS = 60_000L
+
+        /** Starts the service; harmless when it already runs. */
+        fun start(context: Context) {
+            try {
+                context.startService(Intent(context, SessionService::class.java))
+            } catch (e: IllegalStateException) {
+                Log.w(TAG, "The service may not start in the background now", e)
+            } catch (e: SecurityException) {
+                Log.w(TAG, "The service may not start now", e)
+            }
+        }
+    }
+}
