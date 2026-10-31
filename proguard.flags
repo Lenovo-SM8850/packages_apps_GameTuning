@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# The service interface, its parcelables and listener stubs are marshalled by name and by
+# their CREATOR fields.
+-keep class vendor.lenovo.hardware.gametuning.** { *; }
+
+# Activities, receivers and services named in the manifest are kept by the manifest rules.
+# The app writes parcelables to its preset file and reads them back by class.
+-keepclassmembers class * implements android.os.Parcelable {
+    public static final ** CREATOR;
+}
+
+# Hidden platform classes used through the build's platform API.
+-dontwarn android.app.IGameManagerService**
+-dontwarn org.evolution.display.**
+-dontwarn com.android.internal.util.evolution.**
+
+# The material3 build is newer than the UI library of this tree; the one reference to a class
+# only the newer library has sits in the snackbar host animation, which the app does not use.
+-dontwarn androidx.compose.ui.graphics.LayerOutsets

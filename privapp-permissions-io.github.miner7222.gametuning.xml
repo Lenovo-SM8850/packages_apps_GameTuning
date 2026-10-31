@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<permissions>
+    <privapp-permissions package="io.github.miner7222.gametuning">
+        <permission name="android.permission.MANAGE_GAME_MODE" />
+        <permission name="android.permission.QUERY_ALL_PACKAGES" />
+    </privapp-permissions>
+</permissions>
