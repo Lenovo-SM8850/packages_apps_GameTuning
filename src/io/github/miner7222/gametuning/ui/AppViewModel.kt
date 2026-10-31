@@ -1,0 +1,1064 @@
+// SPDX-License-Identifier: Apache-2.0
+package io.github.miner7222.gametuning.ui
+
+import android.app.Application
+import android.net.Uri
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import io.github.miner7222.gametuning.R
+import io.github.miner7222.gametuning.data.AppPrefs
+import io.github.miner7222.gametuning.data.Change
+import io.github.miner7222.gametuning.data.DisplayControl
+import io.github.miner7222.gametuning.data.DisplayValues
+import io.github.miner7222.gametuning.data.GameAllowances
+import io.github.miner7222.gametuning.data.GameLibrary
+import io.github.miner7222.gametuning.data.GameTuningRepository
+import io.github.miner7222.gametuning.data.KEEP
+import io.github.miner7222.gametuning.data.MAX_PRESETS
+import io.github.miner7222.gametuning.data.RecordExport
+import io.github.miner7222.gametuning.data.ModeLibrary
+import io.github.miner7222.gametuning.data.Modes
+import io.github.miner7222.gametuning.data.Preset
+import io.github.miner7222.gametuning.data.PresetStore
+import io.github.miner7222.gametuning.data.Resource
+import io.github.miner7222.gametuning.data.TemperatureFormat
+import io.github.miner7222.gametuning.data.TuningException
+import io.github.miner7222.gametuning.data.Freq
+import io.github.miner7222.gametuning.data.indexAtOrBelow
+import io.github.miner7222.gametuning.data.modeName
+import io.github.miner7222.gametuning.data.onOff
+import io.github.miner7222.gametuning.data.signedSteps
+import io.github.miner7222.gametuning.data.coolRange
+import io.github.miner7222.gametuning.data.deepCopy
+import io.github.miner7222.gametuning.data.defaultConfig
+import io.github.miner7222.gametuning.data.detailChanges
+import io.github.miner7222.gametuning.data.ensureArrays
+import io.github.miner7222.gametuning.data.heatName
+import io.github.miner7222.gametuning.data.ladder
+import io.github.miner7222.gametuning.data.newPresetId
+import io.github.miner7222.gametuning.data.resourceName
+import io.github.miner7222.gametuning.data.retarget
+import io.github.miner7222.gametuning.data.shortSummary
+import io.github.miner7222.gametuning.data.toBase64
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import vendor.lenovo.hardware.gametuning.GameTuningConfig
+import vendor.lenovo.hardware.gametuning.PolicyLimits
+import vendor.lenovo.hardware.gametuning.PolicyProfile
+import vendor.lenovo.hardware.gametuning.ProfileSource
+import vendor.lenovo.hardware.gametuning.IGameTuning
+import vendor.lenovo.hardware.gametuning.Recommendation
+import vendor.lenovo.hardware.gametuning.RecordingInfo
+import vendor.lenovo.hardware.gametuning.RecordingSample
+import vendor.lenovo.hardware.gametuning.TuningChange
+import vendor.lenovo.hardware.gametuning.TuningProposal
+
+/** One card of the game list. */
+data class GameCard(
+    val pkg: String, val label: String, val mode: Int, val presetName: String?,
+    val adjusted: Boolean, val recording: Boolean,
+)
+
+/** Everything the profile screen and the preset screens show for one game. */
+class ProfileState(
+    val pkg: String,
+    val label: String,
+    val mode: Int,
+    val libs: Map<Int, ModeLibrary>,
+    val builtins: Map<Int, PolicyProfile>,
+    val effective: PolicyProfile,
+    val limits: PolicyLimits,
+    val recordings: List<RecordingInfo>,
+    val armed: Boolean,
+    val notice: String?,
+)
+
+/** The preset in use for one profile of one game, with the resolved values the editor needs. */
+class TuningState(
+    val pkg: String,
+    val mode: Int,
+    val label: String,
+    val library: ModeLibrary,
+    val config: GameTuningConfig,
+    val display: DisplayValues,
+    val limits: PolicyLimits,
+    val builtin: PolicyProfile,
+    val base: PolicyProfile,
+    val effective: PolicyProfile,
+    val allow: GameAllowances,
+    val changes: List<Change>,
+    val hasStable: Boolean,
+    val globalsLowBattery: Int,
+) {
+    val preset: Preset? get() = library.inUse
+    val builtinDisplay: DisplayValues get() = DisplayValues.builtin(mode)
+}
+
+/** A message for the snackbar, optionally undoable. */
+class UiMessage(val text: String, val undo: (suspend () -> Unit)? = null)
+
+/** An item of the import list. */
+sealed class ImportItem {
+    abstract val key: String
+    abstract val title: String
+    abstract val subtitle: String
+
+    class Mine(
+        val pkg: String, val mode: Int, val preset: Preset, val gameLabel: String,
+        override val title: String, override val subtitle: String,
+    ) : ImportItem() {
+        override val key get() = "mine:$pkg:$mode:${preset.id}"
+    }
+
+    class BuiltIn(
+        val source: ProfileSource, override val title: String, override val subtitle: String,
+    ) : ImportItem() {
+        override val key get() = "built:${source.profileKey}"
+    }
+}
+
+class ImportSources(val mine: List<ImportItem.Mine>, val builtIn: List<ImportItem.BuiltIn>)
+
+/** Result of a daemon analysis call: a value, or the daemon's error code. */
+sealed class Outcome<out T> {
+    class Ok<T>(val value: T) : Outcome<T>()
+    class Failed(val code: Int) : Outcome<Nothing>()
+}
+
+/** One suggested setting: where it comes from, what it changes and why. */
+class Suggestion(
+    val name: String, val yours: Boolean, val changes: List<String>, val reason: String,
+    val item: ImportItem, val baseMode: Int, val includeExpert: Boolean,
+)
+
+/** One line of the single change an automatic adjustment proposes. */
+class ChangeLine(val label: String, val before: String, val after: String, val delta: String, val raise: Boolean)
+
+class AutoPlan(val proposal: TuningProposal, val lines: List<ChangeLine>, val observation: String)
+
+class CopyTarget(val pkg: String, val mode: Int)
+
+class CopyRequest(
+    val srcPkg: String, val srcMode: Int, val presetId: String,
+    val targets: List<CopyTarget>, val replace: Set<String>,
+    val startUsing: Boolean, val expertToOthers: Boolean,
+)
+
+class AppViewModel(private val app: Application) : AndroidViewModel(app) {
+    val repo = GameTuningRepository(app)
+    val games = GameLibrary(app)
+    val store = PresetStore.getInstance(app)
+    val displayControl = DisplayControl(app)
+    val prefs = AppPrefs(app)
+    val tf = TemperatureFormat(app)
+    private val userId = app.userId
+    private val mutex = Mutex()
+
+    /** null while the first check runs. */
+    var available by mutableStateOf<Boolean?>(null)
+        private set
+    var cards by mutableStateOf<List<GameCard>>(emptyList())
+        private set
+    var tipDismissed by mutableStateOf(prefs.tipDismissed)
+        private set
+    var profile by mutableStateOf<ProfileState?>(null)
+        private set
+    var tuning by mutableStateOf<TuningState?>(null)
+        private set
+    var busy by mutableStateOf(false)
+        private set
+    var lowBatteryPct by mutableStateOf(20)
+        private set
+
+    private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
+    val messages: SharedFlow<UiMessage> = _messages
+
+    private var profilePkg: String? = null
+    private var tuningKey: Pair<String, Int>? = null
+
+    private fun say(text: String, undo: (suspend () -> Unit)? = null) {
+        _messages.tryEmit(UiMessage(text, undo))
+    }
+
+    private fun s(id: Int, vararg args: Any) = app.getString(id, *args)
+
+    /** Runs [block] off the main thread, one at a time, and turns daemon errors into a message. */
+    private fun launchLocked(block: suspend () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            mutex.withLock {
+                busy = true
+                try {
+                    handleFailure(block)
+                } finally {
+                    busy = false
+                }
+            }
+        }
+    }
+
+    private suspend fun handleFailure(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: TuningException) {
+            say(s(R.string.save_failed))
+            runCatching { reloadLocked() }
+        } catch (e: IOException) {
+            android.util.Log.w("GameTuning", "Preset persistence failed", e)
+            say(s(R.string.save_failed))
+            runCatching { reloadLocked() }
+        } catch (e: RuntimeException) {
+            android.util.Log.w("GameTuning", "Operation failed", e)
+            say(s(R.string.save_failed))
+            runCatching { reloadLocked() }
+        }
+    }
+
+    // region loading
+
+    fun start() {
+        launchLocked {
+            available = repo.isAvailable()
+            if (available == true) {
+                lowBatteryPct = repo.globals().lowBatteryPercent
+                reloadLocked()
+            }
+        }
+    }
+
+    fun reload() = launchLocked { reloadLocked() }
+
+    fun showProfile(pkg: String?) {
+        profilePkg = pkg
+        if (pkg == null) profile = null else launchLocked { loadProfileLocked(pkg) }
+    }
+
+    fun showTuning(pkg: String?, mode: Int = 0) {
+        tuningKey = if (pkg == null) null else pkg to mode
+        if (pkg == null) tuning = null else launchLocked { loadTuningLocked(pkg, mode) }
+    }
+
+    private suspend fun reloadLocked() {
+        loadCardsLocked()
+        profilePkg?.let { loadProfileLocked(it) }
+        tuningKey?.let { (p, m) -> loadTuningLocked(p, m) }
+    }
+
+    private suspend fun loadCardsLocked() {
+        val list = games.games()
+        val tunings = repo.tunings()
+        val armed = repo.armedPackages()
+        cards = list.map { g ->
+            val lib = buildLibrary(g.packageName, g.mode, tunings)
+            GameCard(
+                g.packageName, g.label, g.mode, lib.inUse?.name,
+                tunings.any { it.packageName == g.packageName && it.enabled }, g.packageName in armed,
+            )
+        }
+    }
+
+    /** Joins the preset library with the daemon's stored tuning of one profile. */
+    private suspend fun buildLibrary(pkg: String, mode: Int, tunings: List<GameTuningConfig>): ModeLibrary {
+        var list = store.list(pkg, mode)
+        val t = tunings.firstOrNull { it.packageName == pkg && it.mode == mode && it.enabled }
+            ?: return ModeLibrary(list, null)
+        val id = t.variantId.orEmpty().ifEmpty { newPresetId() }
+        val old = list.firstOrNull { it.id == id }
+        val name = t.variantName.orEmpty().ifEmpty { old?.name ?: uniqueName(list, s(R.string.current_setting)) }
+        val cfg = t.deepCopy().also {
+            it.ensureArrays()
+            it.variantId = id
+            it.variantName = name
+        }
+        if (t.variantId.isNullOrEmpty()) repo.setTuning(cfg)
+        // The daemon may have committed a change whose local file write failed, even for this ID.
+        val current = Preset(id, name, cfg, old?.display ?: DisplayValues.builtin(mode))
+        if (old == null || old.name != name || old.config.toBase64() != cfg.toBase64()) {
+            try {
+                store.upsert(pkg, mode, current)
+            } catch (e: IOException) {
+                say(s(R.string.save_failed))
+            }
+        }
+        // Still use the daemon's configuration when the filesystem remains unwritable.
+        list = if (old == null) list + current else list.map { if (it.id == id) current else it }
+        return ModeLibrary(list, id)
+    }
+
+    private suspend fun loadProfileLocked(pkg: String) {
+        val label = games.label(pkg)
+        val mode = games.currentMode(pkg) ?: Modes.BALANCED
+        val tunings = repo.tunings()
+        val libs = Modes.ALL.associateWith { buildLibrary(pkg, it, tunings) }
+        val builtins = Modes.ALL.associateWith { repo.profile(pkg, it, false) }
+        val limits = repo.limits()
+        val recs = repo.recordings(pkg)
+        val armed = pkg in repo.armedPackages()
+        val effective = repo.profile(pkg, mode, true)
+        val notice = recs.firstOrNull { it.mode == mode }?.let { computeNotice(it, limits) }
+        if (profilePkg == pkg) profile = ProfileState(pkg, label, mode, libs, builtins, effective, limits, recs, armed, notice)
+    }
+
+    private suspend fun loadTuningLocked(pkg: String, mode: Int) {
+        val tunings = repo.tunings()
+        val lib = buildLibrary(pkg, mode, tunings)
+        val limits = repo.limits()
+        val builtin = repo.profile(pkg, mode, false)
+        val preset = lib.inUse
+        val cfg = preset?.config?.deepCopy() ?: defaultConfig(userId, pkg, mode)
+        cfg.ensureArrays()
+        val base: PolicyProfile
+        val effective: PolicyProfile
+        if (preset == null) {
+            base = builtin
+            effective = builtin
+        } else {
+            val baseCfg = defaultConfig(userId, pkg, mode).also {
+                it.baseProfile = cfg.baseProfile
+                it.baseMode = cfg.baseMode
+            }
+            base = repo.preview(baseCfg)
+            effective = repo.preview(cfg)
+        }
+        val display = preset?.display ?: DisplayValues.builtin(mode)
+        val allow = games.allowances(pkg)
+        val changes = if (preset == null) emptyList() else
+            app.detailChanges(limits, builtin, effective, display, DisplayValues.builtin(mode), tf)
+        val st = TuningState(
+            pkg, mode, games.label(pkg), lib, cfg, display, limits, builtin, base, effective, allow,
+            changes, preset != null && store.stableConfig(pkg, mode, preset.id) != null, lowBatteryPct,
+        )
+        if (tuningKey == pkg to mode) tuning = st
+    }
+
+    // endregion
+
+    // region profile and presets
+
+    fun dismissTip() {
+        prefs.tipDismissed = true
+        tipDismissed = true
+    }
+
+    fun setMode(pkg: String, mode: Int) = launchLocked {
+        games.setMode(pkg, mode)
+        displayControl.applyRefresh(pkg, mode)
+        reloadLocked()
+    }
+
+    fun setLowBattery(percent: Int) = launchLocked {
+        repo.setGlobals(repo.globals().also { it.lowBatteryPercent = percent })
+        lowBatteryPct = percent
+        tuning?.let { loadTuningLocked(it.pkg, it.mode) }
+    }
+
+    fun setArmed(pkg: String, armed: Boolean) = launchLocked {
+        repo.setArmed(pkg, armed)
+        reloadLocked()
+    }
+
+    private class Snap(val pkg: String, val mode: Int, val presets: List<Preset>, val inUseId: String?)
+
+    private suspend fun snapshot(pkg: String, mode: Int): Snap {
+        val lib = buildLibrary(pkg, mode, repo.tunings())
+        return Snap(pkg, mode, lib.presets, lib.inUseId)
+    }
+
+    private suspend fun restore(snaps: List<Snap>) {
+        mutex.withLock {
+            handleFailure {
+                for (sn in snaps) {
+                    store.replaceAll(sn.pkg, sn.mode, sn.presets)
+                    activate(sn.pkg, sn.mode, sn.presets.firstOrNull { it.id == sn.inUseId })
+                }
+                reloadLocked()
+            }
+        }
+    }
+
+    private fun undoFor(vararg snaps: Snap): suspend () -> Unit = { restore(snaps.toList()) }
+
+    private suspend fun applyDisplay(pkg: String, mode: Int, d: DisplayValues, allow: GameAllowances) {
+        val ok = displayControl.applyGameManager(pkg, mode, d, allow)
+        displayControl.applyRefresh(pkg, mode)
+        if (!ok) say(s(R.string.display_apply_failed))
+    }
+
+    /** Makes [preset] (or the built-in setting when null) the one in use for a profile. */
+    private suspend fun activate(pkg: String, mode: Int, preset: Preset?) {
+        val allow = games.allowances(pkg)
+        if (preset == null) {
+            repo.clearTuning(pkg, mode)
+            applyDisplay(pkg, mode, DisplayValues.builtin(mode), allow)
+            return
+        }
+        val cfg = preset.config.deepCopy().also {
+            it.ensureArrays()
+            it.userId = userId
+            it.packageName = pkg
+            it.mode = mode
+            it.enabled = true
+            it.variantId = preset.id
+            it.variantName = preset.name
+        }
+        val normalized = repo.setTuning(cfg)
+        normalized.ensureArrays()
+        store.upsert(pkg, mode, Preset(preset.id, preset.name, normalized, preset.display))
+        applyDisplay(pkg, mode, preset.display, allow)
+    }
+
+    fun usePreset(pkg: String, mode: Int, id: String?, andThen: (() -> Unit)? = null) = launchLocked {
+        val before = snapshot(pkg, mode)
+        val preset = before.presets.firstOrNull { it.id == id }
+        activate(pkg, mode, preset)
+        reloadLocked()
+        say(
+            s(R.string.now_using, preset?.name ?: s(R.string.builtin_setting), s(modeLabelRes(mode))),
+            undoFor(before),
+        )
+        andThen?.invoke()
+    }
+
+    fun uniqueName(existing: List<Preset>, wanted: String): String {
+        val taken = existing.map { it.name }.toSet() + s(R.string.builtin_setting)
+        if (wanted !in taken) return wanted
+        var n = 2
+        while ("$wanted $n" in taken) n++
+        return "$wanted $n"
+    }
+
+    fun canAddPreset(pkg: String, mode: Int) = store.list(pkg, mode).size + 1 < MAX_PRESETS
+
+    fun createPreset(pkg: String, mode: Int, name: String, fromBuiltin: Boolean) = launchLocked {
+        val lib = buildLibrary(pkg, mode, repo.tunings())
+        if (lib.presets.size + 1 >= MAX_PRESETS) {
+            say(s(R.string.preset_limit))
+            return@launchLocked
+        }
+        val before = Snap(pkg, mode, lib.presets, lib.inUseId)
+        val inUse = lib.inUse
+        val cfg = if (fromBuiltin || inUse == null) defaultConfig(userId, pkg, mode) else inUse.config.deepCopy()
+        val disp = if (fromBuiltin || inUse == null) DisplayValues.builtin(mode) else inUse.display
+        val finalName = uniqueName(lib.presets, name.trim().take(64).ifEmpty { s(R.string.new_preset) })
+        val p = Preset(newPresetId(), finalName, cfg, disp)
+        store.upsert(pkg, mode, p)
+        activate(pkg, mode, p)
+        reloadLocked()
+        say(s(R.string.preset_created, finalName), undoFor(before))
+    }
+
+    fun duplicatePreset(pkg: String, mode: Int, id: String) = launchLocked {
+        val lib = buildLibrary(pkg, mode, repo.tunings())
+        val src = lib.presets.firstOrNull { it.id == id } ?: return@launchLocked
+        if (lib.presets.size + 1 >= MAX_PRESETS) {
+            say(s(R.string.preset_limit))
+            return@launchLocked
+        }
+        val before = Snap(pkg, mode, lib.presets, lib.inUseId)
+        val name = uniqueName(lib.presets, s(R.string.name_copy, src.name).take(64))
+        val p = Preset(newPresetId(), name, src.config.deepCopy(), src.display)
+        store.upsert(pkg, mode, p)
+        activate(pkg, mode, p)
+        reloadLocked()
+        say(s(R.string.preset_created, name), undoFor(before))
+    }
+
+    fun renamePreset(pkg: String, mode: Int, id: String, name: String) = launchLocked {
+        val lib = buildLibrary(pkg, mode, repo.tunings())
+        val src = lib.presets.firstOrNull { it.id == id } ?: return@launchLocked
+        val clean = name.trim().take(64)
+        if (clean.isEmpty() || clean == src.name) return@launchLocked
+        val before = Snap(pkg, mode, lib.presets, lib.inUseId)
+        val finalName = uniqueName(lib.presets.filter { it.id != id }, clean)
+        val renamed = Preset(id, finalName, src.config.deepCopy().also { it.variantName = finalName }, src.display)
+        store.upsert(pkg, mode, renamed)
+        if (lib.inUseId == id) activate(pkg, mode, renamed)
+        reloadLocked()
+        say(s(R.string.renamed_to, finalName), undoFor(before))
+    }
+
+    fun deletePreset(pkg: String, mode: Int, id: String) = launchLocked {
+        val lib = buildLibrary(pkg, mode, repo.tunings())
+        val before = Snap(pkg, mode, lib.presets, lib.inUseId)
+        if (lib.inUseId == id) activate(pkg, mode, null)
+        store.delete(pkg, mode, id)
+        reloadLocked()
+        say(s(R.string.preset_deleted), undoFor(before))
+    }
+
+    // endregion
+
+    // region editing
+
+    /**
+     * Applies one edit to the preset in use and saves it. Editing while the built-in setting is in
+     * use first creates a preset of its own, since the built-in setting never changes.
+     */
+    fun edit(
+        description: String,
+        change: (cfg: GameTuningConfig, display: DisplayValues, st: TuningState) -> DisplayValues,
+    ) {
+        val st = tuning ?: return
+        launchLocked {
+            val before = snapshot(st.pkg, st.mode)
+            val lib = buildLibrary(st.pkg, st.mode, repo.tunings())
+            val cfg = (lib.inUse?.config?.deepCopy() ?: defaultConfig(userId, st.pkg, st.mode)).also { it.ensureArrays() }
+            val oldDisplay = lib.inUse?.display ?: DisplayValues.builtin(st.mode)
+            val newDisplay = change(cfg, oldDisplay, st)
+            val existing = lib.inUse
+            if (existing == null && lib.presets.size + 1 >= MAX_PRESETS) {
+                say(s(R.string.preset_limit))
+                return@launchLocked
+            }
+            val name = existing?.name ?: uniqueName(lib.presets, s(R.string.my_preset))
+            val id = existing?.id ?: newPresetId()
+            cfg.userId = userId
+            cfg.packageName = st.pkg
+            cfg.mode = st.mode
+            cfg.enabled = true
+            cfg.variantId = id
+            cfg.variantName = name
+            val normalized = repo.setTuning(cfg)
+            normalized.ensureArrays()
+            store.upsert(st.pkg, st.mode, Preset(id, name, normalized, newDisplay))
+            if (newDisplay != oldDisplay || existing == null) {
+                applyDisplay(st.pkg, st.mode, newDisplay, st.allow)
+            }
+            reloadLocked()
+            say(s(R.string.saved_to, name, description), undoFor(before))
+        }
+    }
+
+    fun goBackToStable() {
+        val st = tuning ?: return
+        val preset = st.preset ?: return
+        launchLocked {
+            val stable = store.stableConfig(st.pkg, st.mode, preset.id) ?: return@launchLocked
+            val before = snapshot(st.pkg, st.mode)
+            val restored = Preset(preset.id, preset.name, stable, preset.display)
+            store.upsert(st.pkg, st.mode, restored)
+            activate(st.pkg, st.mode, restored)
+            reloadLocked()
+            say(s(R.string.went_back_stable), undoFor(before))
+        }
+    }
+
+    fun resetPreset() {
+        val st = tuning ?: return
+        val preset = st.preset ?: return
+        launchLocked {
+            val before = snapshot(st.pkg, st.mode)
+            val fresh = Preset(preset.id, preset.name, defaultConfig(userId, st.pkg, st.mode), DisplayValues.builtin(st.mode))
+            store.upsert(st.pkg, st.mode, fresh)
+            activate(st.pkg, st.mode, fresh)
+            reloadLocked()
+            say(s(R.string.preset_reset), undoFor(before))
+        }
+    }
+
+    fun resetGame(pkg: String) = launchLocked {
+        val befores = Modes.ALL.map { snapshot(pkg, it) }
+        for (m in Modes.ALL) activate(pkg, m, null)
+        store.clearGame(pkg)
+        reloadLocked()
+        say(s(R.string.game_reset), undoFor(*befores.toTypedArray()))
+    }
+
+    // endregion
+
+    // region copy and import
+
+    private fun stripExpert(c: GameTuningConfig) {
+        c.sceneMode = KEEP
+        c.scenes = emptyArray()
+        c.customThreads = emptyArray()
+        if (c.threadRules == 3) c.threadRules = 1
+    }
+
+    private fun keepBothName(existing: List<Preset>, name: String): String {
+        var n = 2
+        while (existing.any { it.name == "$name $n" }) n++
+        return "$name $n"
+    }
+
+    /** Copies a preset to several profiles and games. Returns how many copies were added. */
+    fun copyPreset(req: CopyRequest) = launchLocked {
+        val srcLib = buildLibrary(req.srcPkg, req.srcMode, repo.tunings())
+        val src = srcLib.presets.firstOrNull { it.id == req.presetId } ?: return@launchLocked
+        val resolvedKey = repo.preview(src.config.deepCopy().also {
+            it.userId = userId; it.packageName = req.srcPkg; it.mode = req.srcMode; it.enabled = true
+        }).profileKey
+        val befores = ArrayList<Snap>()
+        var added = 0
+        var skipped = 0
+        for (t in req.targets) {
+            val sameGame = t.pkg == req.srcPkg
+            val before = snapshot(t.pkg, t.mode)
+            befores.add(before)
+            val list = before.presets
+            val cfg = src.config.retarget(userId, t.pkg, t.mode, resolvedKey)
+            if (!sameGame && !req.expertToOthers) stripExpert(cfg)
+            val existing = list.firstOrNull { it.name == src.name }
+            val replacing = existing != null && "${t.pkg}|${t.mode}" in req.replace
+            val target: Preset
+            if (replacing) {
+                target = Preset(existing!!.id, existing.name, cfg, src.display)
+            } else {
+                if (list.size + 1 >= MAX_PRESETS) {
+                    skipped++
+                    continue
+                }
+                val name = if (existing != null) keepBothName(list, src.name) else src.name
+                target = Preset(newPresetId(), name, cfg, src.display)
+            }
+            store.upsert(t.pkg, t.mode, target)
+            added++
+            val inUseThere = before.inUseId == target.id
+            if (req.startUsing || inUseThere) activate(t.pkg, t.mode, target)
+        }
+        reloadLocked()
+        say(if (skipped > 0) s(R.string.copy_partial, added, skipped) else s(R.string.copy_done, added), undoFor(*befores.toTypedArray()))
+    }
+
+    private fun builtInItem(src: ProfileSource): ImportItem.BuiltIn {
+        val name = src.displayName.orEmpty().ifBlank {
+            if (src.profileKey == "default") s(R.string.common_setting)
+            else src.packages?.firstOrNull()?.let { games.label(it) } ?: src.profileKey
+        }
+        val count = src.baseModes?.size ?: 0
+        return ImportItem.BuiltIn(src, name, s(R.string.builtin_points, count))
+    }
+
+    suspend fun importSources(pkg: String): ImportSources {
+        val mine = ArrayList<ImportItem.Mine>()
+        for ((p, m, preset) in store.others(pkg)) {
+            val g = games.label(p)
+            mine.add(ImportItem.Mine(p, m, preset, g, preset.name, s(R.string.import_where, g, s(modeLabelRes(m)))))
+        }
+        val builtIn = repo.profileSources().map { builtInItem(it) }.sortedBy { if (it.source.profileKey == "default") "" else it.title.lowercase() }
+        return ImportSources(mine.sortedBy { it.title.lowercase() }, builtIn)
+    }
+
+    /** The values an import would bring, for the preview. */
+    suspend fun importPreview(item: ImportItem, baseMode: Int): List<String> {
+        val limits = repo.limits()
+        return when (item) {
+            is ImportItem.Mine -> {
+                val prof = repo.preview(item.preset.config.deepCopy().also {
+                    it.userId = userId; it.packageName = item.pkg; it.mode = item.mode; it.enabled = true
+                })
+                val builtin = repo.profile(item.pkg, item.mode, false)
+                val d = DisplayValues.builtin(item.mode)
+                val rows = app.detailChanges(limits, builtin, prof, item.preset.display, d, tf)
+                rows.map { it.label + " " + it.after }
+            }
+            is ImportItem.BuiltIn -> {
+                val prof = repo.sourceProfile(item.source.profileKey, baseMode)
+                profileRows(limits, prof)
+            }
+        }
+    }
+
+    private fun profileRows(limits: PolicyLimits, p: PolicyProfile): List<String> {
+        val out = ArrayList<String>()
+        for (r in Resource.GOLD..Resource.GPU) {
+            val ladder = limits.ladder(r)
+            if (ladder.isEmpty()) continue
+            val (lo, hi) = p.coolRange(limits, r)
+            out.add(app.resourceName(r) + " " + Freq.range(r, ladder[lo], ladder[hi]))
+        }
+        out.add(s(R.string.heat_limit) + " " + app.heatName(p.thermalCase))
+        return out
+    }
+
+    fun doImport(
+        item: ImportItem, baseMode: Int, targetPkg: String, targetMode: Int,
+        replaceInUse: Boolean, includeExpert: Boolean, nameOverride: String? = null,
+    ) = launchLocked {
+        val lib = buildLibrary(targetPkg, targetMode, repo.tunings())
+        val before = Snap(targetPkg, targetMode, lib.presets, lib.inUseId)
+        val replacing = replaceInUse && lib.inUse != null
+        if (!replacing && lib.presets.size + 1 >= MAX_PRESETS) {
+            say(s(R.string.preset_limit))
+            return@launchLocked
+        }
+        val cfg: GameTuningConfig
+        val disp: DisplayValues
+        val wanted: String
+        when (item) {
+            is ImportItem.Mine -> {
+                val key = repo.preview(item.preset.config.deepCopy().also {
+                    it.userId = userId; it.packageName = item.pkg; it.mode = item.mode; it.enabled = true
+                }).profileKey
+                cfg = item.preset.config.retarget(userId, targetPkg, targetMode, key)
+                if (!includeExpert) stripExpert(cfg)
+                disp = item.preset.display
+                wanted = item.preset.name
+            }
+            is ImportItem.BuiltIn -> {
+                cfg = defaultConfig(userId, targetPkg, targetMode).also {
+                    it.baseProfile = item.source.profileKey
+                    it.baseMode = baseMode
+                    it.threadRules = if (includeExpert) 2 else 1
+                }
+                disp = DisplayValues.builtin(targetMode)
+                wanted = item.title
+            }
+        }
+        val p = if (replacing) {
+            Preset(lib.inUse!!.id, lib.inUse!!.name, cfg, disp)
+        } else {
+            val chosen = nameOverride?.trim()?.takeIf { it.isNotEmpty() } ?: wanted
+            Preset(newPresetId(), uniqueName(lib.presets, chosen.take(64)), cfg, disp)
+        }
+        store.upsert(targetPkg, targetMode, p)
+        activate(targetPkg, targetMode, p)
+        reloadLocked()
+        say(s(R.string.imported_as, p.name), undoFor(before))
+    }
+
+    // endregion
+
+    /** What a preset changes from the game's own setting, resolved by the daemon. */
+    suspend fun presetChanges(pkg: String, mode: Int, preset: Preset?): List<Change> {
+        if (preset == null) return emptyList()
+        return try {
+            val limits = repo.limits()
+            val builtin = repo.profile(pkg, mode, false)
+            val eff = repo.preview(preset.config.deepCopy().also {
+                it.ensureArrays(); it.userId = userId; it.packageName = pkg; it.mode = mode; it.enabled = true
+            })
+            app.detailChanges(limits, builtin, eff, preset.display, DisplayValues.builtin(mode), tf)
+        } catch (_: TuningException) {
+            emptyList()
+        }
+    }
+
+    /** Records of one profile made with one preset (null id is the built-in setting). */
+    fun recordsWith(ps: ProfileState, mode: Int, presetId: String?): List<RecordingInfo> =
+        ps.recordings.filter { it.mode == mode && (it.profile?.variantId.orEmpty()) == presetId.orEmpty() }
+
+    // region records, suggestions and automatic adjustment
+
+    private val sampleCache = object : LinkedHashMap<String, List<RecordingSample>>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<RecordingSample>>?) = size > 3
+    }
+
+    /** Every sample of a record, read in pages of 600 and kept for the next screen. */
+    suspend fun samplesFor(id: String): List<RecordingSample> {
+        synchronized(sampleCache) { sampleCache[id] }?.let { return it }
+        val list = repo.samples(id)
+        synchronized(sampleCache) { sampleCache[id] = list }
+        return list
+    }
+
+    /** The record being written to a CSV file now, if any. */
+    var exportingId by mutableStateOf<String?>(null)
+        private set
+
+    /** The name the file picker starts with for [info]. */
+    fun exportFileName(info: RecordingInfo): String = RecordExport.defaultName(games.label(info.packageName), info)
+
+    /**
+     * Writes [info] to the file the user picked, in the background. It does not take the operation
+     * lock, so the rest of the app stays usable; the result comes back as a message.
+     */
+    fun exportRecord(info: RecordingInfo, uri: Uri) {
+        if (exportingId != null) return
+        exportingId = info.id
+        viewModelScope.launch {
+            var ok = false
+            try {
+                RecordExport.write(app, repo, info, games.label(info.packageName), uri)
+                ok = true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("GameTuning", "Export failed", e)
+            } finally {
+                exportingId = null
+            }
+            say(s(if (ok) R.string.export_done else R.string.export_failed))
+        }
+    }
+
+    fun deleteRecord(id: String) = launchLocked {
+        repo.deleteRecording(id)
+        synchronized(sampleCache) { sampleCache.remove(id) }
+        reloadLocked()
+        say(s(R.string.record_deleted))
+    }
+
+    private fun baseModeName(baseMode: Int) = if (baseMode == 4) s(R.string.mode_maximum) else app.modeName(baseMode)
+
+    private fun unitless(resource: Int, value: Int) =
+        if (resource == Resource.GPU) Freq.mhzNumber(value) else Freq.ghzNumber(value)
+
+    /** Up to three settings that fit a record, with their concrete changes and a reason each. */
+    suspend fun suggestionsFor(info: RecordingInfo, goal: Int): Outcome<List<Suggestion>> {
+        return try {
+            val recs = repo.recommend(info.id, goal)
+            val limits = repo.limits()
+            val sources = repo.profileSources()
+            val tunings = repo.tunings()
+            Outcome.Ok(recs.mapNotNull { suggestionFrom(info, it, limits, sources, tunings) })
+        } catch (e: TuningException) {
+            Outcome.Failed(e.code)
+        }
+    }
+
+    private fun suggestionFrom(
+        info: RecordingInfo, rec: Recommendation, limits: PolicyLimits, sources: List<ProfileSource>,
+        tunings: List<GameTuningConfig>,
+    ): Suggestion? {
+        val tunedPkg = rec.tunedPackage.orEmpty()
+        val item: ImportItem
+        val name: String
+        if (tunedPkg.isNotEmpty()) {
+            val cfg = tunings.firstOrNull { it.packageName == tunedPkg && it.mode == rec.tunedMode && it.enabled }
+                ?: return null
+            val vid = cfg.variantId.orEmpty()
+            val local = if (vid.isNotEmpty()) store.get(tunedPkg, rec.tunedMode, vid) else null
+            val preset = Preset(
+                vid.ifEmpty { newPresetId() },
+                cfg.variantName.orEmpty().ifEmpty { local?.name ?: s(R.string.current_setting) },
+                cfg.deepCopy().also { it.ensureArrays() }, local?.display ?: DisplayValues.builtin(rec.tunedMode),
+            )
+            val game = games.label(tunedPkg)
+            name = s(R.string.suggest_name, game, preset.name)
+            item = ImportItem.Mine(
+                tunedPkg, rec.tunedMode, preset, game, preset.name,
+                s(R.string.import_where, game, s(modeLabelRes(rec.tunedMode))),
+            )
+        } else {
+            val src = sources.firstOrNull { it.profileKey == rec.profileKey } ?: return null
+            val built = builtInItem(src)
+            name = s(R.string.suggest_name, built.title, baseModeName(rec.baseMode))
+            item = built
+        }
+        val recorded = info.profile
+        val candidate = rec.profile
+        val chips = ArrayList<String>()
+        for (r in Resource.GOLD..Resource.GPU) {
+            val d = rec.directions?.getOrNull(r) ?: 0
+            if (d == 0) continue
+            val ladder = limits.ladder(r)
+            if (ladder.isEmpty()) continue
+            var text: String? = null
+            if (recorded != null && candidate != null) {
+                val from = recorded.coolRange(limits, r).second
+                val to = candidate.coolRange(limits, r).second
+                if (to != from && (to > from) == (d > 0)) {
+                    text = s(R.string.suggest_dir_steps, app.resourceName(r), app.signedSteps(to - from), unitless(r, ladder[from]), Freq.one(r, ladder[to]))
+                }
+            }
+            chips.add(text ?: s(if (d > 0) R.string.suggest_dir_higher else R.string.suggest_dir_lower, app.resourceName(r)))
+        }
+        if (recorded != null && candidate != null && candidate.thermalCase != recorded.thermalCase) {
+            chips.add(s(R.string.suggest_dir_heat, app.heatName(recorded.thermalCase), app.heatName(candidate.thermalCase)))
+        }
+        if (chips.isEmpty()) chips.add(s(R.string.suggest_dir_other))
+        return Suggestion(
+            name, tunedPkg.isNotEmpty(), chips, reasonFor(info, rec), item, rec.baseMode,
+            includeExpert = tunedPkg == info.packageName,
+        )
+    }
+
+    /** One short line from the daemon's reason bits that fits what the candidate changes. */
+    private fun reasonFor(info: RecordingInfo, rec: Recommendation): String {
+        val bits = rec.reasons
+        fun has(b: Int) = (bits and b) != 0
+        val raise = rec.directions?.any { it > 0 } == true
+        val lower = rec.directions?.any { it < 0 } == true
+        val target = info.summary.targetFps
+        val hot = tf.absolute(info.summary.maxSkinC.toDouble())
+        val out = ArrayList<String>()
+        if (raise) {
+            if (has(IGameTuning.REASON_THERMAL_LIMITED)) out.add(s(R.string.reason_thermal))
+            if (has(IGameTuning.REASON_GPU_BOUND)) out.add(s(R.string.reason_gpu_bound))
+            if (has(IGameTuning.REASON_CPU_BOUND)) out.add(s(R.string.reason_cpu_bound))
+            if (has(IGameTuning.REASON_FPS_SHORT)) out.add(s(R.string.reason_fps_short, target))
+        }
+        if (lower) {
+            if (has(IGameTuning.REASON_OVERPROVISIONED)) out.add(s(R.string.reason_over))
+            if (has(IGameTuning.REASON_HOT)) out.add(s(R.string.reason_hot, hot))
+        }
+        if (out.isEmpty()) {
+            if (has(IGameTuning.REASON_TARGET_MET)) out.add(s(R.string.reason_target_met, target))
+            if (has(IGameTuning.REASON_FPS_SHORT)) out.add(s(R.string.reason_fps_short, target))
+            if (has(IGameTuning.REASON_HOT)) out.add(s(R.string.reason_hot, hot))
+            if (has(IGameTuning.REASON_NO_POWER)) out.add(s(R.string.reason_no_power))
+        }
+        return if (out.isEmpty()) s(R.string.reason_generic) else out.take(2).joinToString(" ")
+    }
+
+    /** The single change the daemon proposes for a record and goal, with an observation line. */
+    suspend fun autoPlanFor(info: RecordingInfo, goal: Int): Outcome<AutoPlan> {
+        return try {
+            val p = repo.autoTune(info.id, goal)
+            val limits = repo.limits()
+            val lines = p.changes.orEmpty().mapNotNull { changeLine(limits, it) }
+            Outcome.Ok(AutoPlan(p, lines, observationFor(info, p)))
+        } catch (e: TuningException) {
+            Outcome.Failed(e.code)
+        }
+    }
+
+    private fun changeLine(limits: PolicyLimits, ch: TuningChange): ChangeLine? {
+        val res = app.resources
+        when (ch.kind) {
+            IGameTuning.CHANGE_MAX_FREQ, IGameTuning.CHANGE_MIN_FREQ -> {
+                val r = ch.resource
+                val ladder = limits.ladder(r)
+                if (ladder.isEmpty()) return null
+                val isMax = ch.kind == IGameTuning.CHANGE_MAX_FREQ
+                val show = { v: Int -> if (v <= 0) s(R.string.no_minimum) else Freq.one(r, v) }
+                val steps = ladder.indexAtOrBelow(ch.after.coerceAtLeast(0)) - ladder.indexAtOrBelow(ch.before.coerceAtLeast(0))
+                val n = kotlin.math.abs(steps)
+                val delta = when {
+                    steps > 0 -> res.getQuantityString(R.plurals.steps_higher, n, n)
+                    steps < 0 -> res.getQuantityString(R.plurals.steps_lower, n, n)
+                    else -> ""
+                }
+                return ChangeLine(
+                    s(if (isMax) R.string.change_top else R.string.change_low, app.resourceName(r)),
+                    show(ch.before), show(ch.after), delta, steps > 0,
+                )
+            }
+            IGameTuning.CHANGE_THERMAL_CASE -> {
+                val levels = (ch.after - ch.before) / 100
+                val n = kotlin.math.abs(levels)
+                val delta = when {
+                    levels > 0 -> res.getQuantityString(R.plurals.levels_higher, n, n)
+                    levels < 0 -> res.getQuantityString(R.plurals.levels_lower, n, n)
+                    else -> ""
+                }
+                return ChangeLine(s(R.string.heat_limit), app.heatName(ch.before), app.heatName(ch.after), delta, levels > 0)
+            }
+            IGameTuning.CHANGE_FRAME_BOOST -> {
+                val on = ch.after == 1
+                return ChangeLine(
+                    s(R.string.ramp_up), app.onOff(ch.before == 1), app.onOff(on),
+                    s(if (on) R.string.chip_turned_on else R.string.chip_turned_off), on,
+                )
+            }
+        }
+        return null
+    }
+
+    private fun observationFor(info: RecordingInfo, p: TuningProposal): String {
+        fun has(b: Int) = (p.reasons and b) != 0
+        val change = p.changes?.firstOrNull()
+        val lowering = change != null && change.after < change.before
+        val target = info.summary.targetFps
+        return when {
+            change != null && (change.kind == IGameTuning.CHANGE_THERMAL_CASE || (lowering && has(IGameTuning.REASON_HOT))) ->
+                s(R.string.obs_thermal)
+            has(IGameTuning.REASON_FPS_SHORT) -> when {
+                has(IGameTuning.REASON_GPU_BOUND) -> s(R.string.obs_short_gpu)
+                has(IGameTuning.REASON_CPU_BOUND) -> s(R.string.obs_short_cpu)
+                else -> s(R.string.obs_short, target)
+            }
+            change != null && lowering && change.resource >= 0 -> s(R.string.obs_unused, app.resourceName(change.resource))
+            has(IGameTuning.REASON_TARGET_MET) -> s(R.string.obs_met, target)
+            else -> s(R.string.obs_none)
+        }
+    }
+
+    /**
+     * Applies an automatic adjustment with the proposal's tuning unchanged, so the daemon can tell
+     * it from the proposal. Changing the preset in use keeps the previous tuning as its last stable
+     * setting.
+     */
+    fun applyAutoTune(info: RecordingInfo, plan: AutoPlan, asNew: Boolean, name: String) = launchLocked {
+        val pkg = info.packageName
+        val mode = info.mode
+        val lib = buildLibrary(pkg, mode, repo.tunings())
+        val inUse = lib.inUse
+        val before = Snap(pkg, mode, lib.presets, lib.inUseId)
+        val cfg = plan.proposal.tuning.deepCopy()
+        if (!asNew && inUse != null) {
+            store.setStable(pkg, mode, inUse.id, inUse.config)
+            cfg.variantId = inUse.id
+            cfg.variantName = inUse.name
+            val normalized = repo.setTuning(cfg).also { it.ensureArrays() }
+            store.upsert(pkg, mode, Preset(inUse.id, inUse.name, normalized, inUse.display))
+            reloadLocked()
+            say(s(R.string.auto_changed, inUse.name), undoFor(before))
+        } else {
+            if (lib.presets.size + 1 >= MAX_PRESETS) {
+                say(s(R.string.preset_limit))
+                return@launchLocked
+            }
+            val finalName = uniqueName(lib.presets, name.trim().take(64).ifEmpty { s(R.string.new_preset) })
+            val id = newPresetId()
+            cfg.variantId = id
+            cfg.variantName = finalName
+            val normalized = repo.setTuning(cfg).also { it.ensureArrays() }
+            store.upsert(pkg, mode, Preset(id, finalName, normalized, inUse?.display ?: DisplayValues.builtin(mode)))
+            reloadLocked()
+            say(s(R.string.preset_created, finalName), undoFor(before))
+        }
+    }
+
+    // endregion
+
+    // region notice
+
+    private suspend fun computeNotice(info: RecordingInfo, limits: PolicyLimits): String? {
+        val samples = try { repo.samples(info.id) } catch (_: TuningException) { return null }
+        if (samples.isEmpty()) return null
+        var bestRes = -1
+        var bestCount = 0
+        var bestTemp = Int.MIN_VALUE
+        for (r in Resource.GOLD..Resource.GPU) {
+            val caps = samples.map {
+                when (r) {
+                    Resource.GOLD -> it.goldCapKHz
+                    Resource.PRIME -> it.primeCapKHz
+                    else -> it.gpuCapHz
+                }
+            }
+            val top = caps.filter { it > 0 }.maxOrNull() ?: continue
+            var count = 0
+            var temp = Int.MIN_VALUE
+            samples.forEachIndexed { i, smp ->
+                if (caps[i] in 1 until top) {
+                    count++
+                    if (smp.skinMilliC > vendor.lenovo.hardware.gametuning.IGameTuning.TEMPERATURE_UNAVAILABLE) temp = maxOf(temp, smp.skinMilliC)
+                }
+            }
+            if (count > bestCount) {
+                bestCount = count; bestRes = r; bestTemp = temp
+            }
+        }
+        if (bestRes < 0 || bestCount < 60 || bestTemp == Int.MIN_VALUE) return null
+        val minutes = (bestCount / 60).coerceAtLeast(1)
+        val id = when (bestRes) {
+            Resource.GOLD -> R.string.notice_lowered_cpu
+            Resource.PRIME -> R.string.notice_lowered_fastest
+            else -> R.string.notice_lowered_graphics
+        }
+        return s(id, minutes, tf.absoluteMilli(bestTemp))
+    }
+
+    // endregion
+
+    companion object {
+        fun modeLabelRes(mode: Int) = when (mode) {
+            Modes.PERFORMANCE -> R.string.mode_performance
+            Modes.BATTERY -> R.string.mode_battery
+            else -> R.string.mode_balanced
+        }
+    }
+}
