@@ -15,6 +15,8 @@ import androidx.lifecycle.viewModelScope
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.AppPrefs
 import io.github.miner7222.gametuning.data.Change
+import io.github.miner7222.gametuning.data.ImportPreview
+import io.github.miner7222.gametuning.data.importStepChanges
 import io.github.miner7222.gametuning.data.DisplayControl
 import io.github.miner7222.gametuning.data.DisplayValues
 import io.github.miner7222.gametuning.data.GameAllowances
@@ -42,6 +44,7 @@ import io.github.miner7222.gametuning.data.coolRange
 import io.github.miner7222.gametuning.data.deepCopy
 import io.github.miner7222.gametuning.data.defaultConfig
 import io.github.miner7222.gametuning.data.detailChanges
+import io.github.miner7222.gametuning.data.importChanges
 import io.github.miner7222.gametuning.data.ensureArrays
 import io.github.miner7222.gametuning.data.builtinName
 import io.github.miner7222.gametuning.data.heatName
@@ -791,36 +794,55 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The values an import would bring, for the preview. */
-    suspend fun importPreview(item: ImportItem, baseMode: Int): List<String> {
-        val limits = repo.limits()
-        return when (item) {
-            is ImportItem.Mine -> {
-                val prof = repo.preview(item.preset.config.deepCopy().also {
-                    it.userId = userId; it.packageName = item.pkg; it.mode = item.mode; it.enabled = true
-                })
-                val builtin = repo.profile(item.pkg, item.mode, false)
-                val d = DisplayValues.builtin(item.mode)
-                val rows = app.detailChanges(limits, builtin, prof, item.preset.display, d, tf)
-                rows.map { it.label + " " + it.after }
+    private suspend fun prepareImport(
+        item: ImportItem, baseMode: Int, targetPkg: String, targetMode: Int, includeExpert: Boolean,
+    ): Pair<GameTuningConfig, DisplayValues> = when (item) {
+        is ImportItem.Mine -> {
+            val key = repo.preview(item.preset.config.deepCopy().also {
+                it.userId = userId; it.packageName = item.pkg; it.mode = item.mode; it.enabled = true
+            }).profileKey
+            val cfg = item.preset.config.retarget(userId, targetPkg, targetMode, key)
+            if (!includeExpert) stripExpert(cfg)
+            cfg to item.preset.display
+        }
+        is ImportItem.BuiltIn -> {
+            val cfg = defaultConfig(userId, targetPkg, targetMode).also {
+                it.baseProfile = item.source.profileKey
+                it.baseMode = baseMode
+                it.threadRules = if (includeExpert) 2 else 1
             }
-            is ImportItem.BuiltIn -> {
-                val prof = repo.sourceProfile(item.source.profileKey, baseMode)
-                profileRows(limits, prof)
-            }
+            cfg to DisplayValues.builtin(targetMode)
         }
     }
 
-    private fun profileRows(limits: PolicyLimits, p: PolicyProfile): List<String> {
-        val out = ArrayList<String>()
-        for (r in Resource.GOLD..Resource.GPU) {
-            val ladder = limits.ladder(r)
-            if (ladder.isEmpty()) continue
-            val (lo, hi) = p.coolRange(limits, r)
-            out.add(app.resourceName(r) + " " + Freq.range(r, ladder[lo], ladder[hi]))
+    /** Compare the exact import configuration with the target mode's current settings. */
+    suspend fun importPreview(
+        item: ImportItem, baseMode: Int, targetPkg: String, targetMode: Int, includeExpert: Boolean,
+    ): List<Change> = resolveImportPreview(item, baseMode, targetPkg, targetMode, includeExpert).changes
+
+    internal suspend fun importPreviewDetails(
+        item: ImportItem, baseMode: Int, targetPkg: String, targetMode: Int, includeExpert: Boolean,
+    ): ImportPreview {
+        val preview = resolveImportPreview(item, baseMode, targetPkg, targetMode, includeExpert)
+        return preview.copy(changes = preview.changes.filterNot { it.label == s(R.string.steps_title) })
+    }
+
+    private suspend fun resolveImportPreview(
+        item: ImportItem, baseMode: Int, targetPkg: String, targetMode: Int, includeExpert: Boolean,
+    ): ImportPreview {
+        val (cfg, display) = prepareImport(item, baseMode, targetPkg, targetMode, includeExpert)
+        val current = repo.tunings().firstOrNull {
+            it.packageName == targetPkg && it.mode == targetMode && it.enabled
         }
-        out.add(s(R.string.heat_limit) + " " + app.heatName(p.thermalCase))
-        return out
+        val before = if (current != null) repo.preview(current) else repo.profile(targetPkg, targetMode, false)
+        val beforeDisplay = current?.variantId?.let { store.get(targetPkg, targetMode, it)?.display }
+            ?: DisplayValues.builtin(targetMode)
+        val limits = repo.limits()
+        val after = repo.preview(cfg)
+        return ImportPreview(
+            app.importChanges(limits, before, after, display, beforeDisplay, tf),
+            app.importStepChanges(limits, before, after, tf),
+        )
     }
 
     fun doImport(
@@ -838,28 +860,10 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             say(s(R.string.preset_limit))
             return@launchLocked
         }
-        val cfg: GameTuningConfig
-        val disp: DisplayValues
-        val wanted: String
-        when (item) {
-            is ImportItem.Mine -> {
-                val key = repo.preview(item.preset.config.deepCopy().also {
-                    it.userId = userId; it.packageName = item.pkg; it.mode = item.mode; it.enabled = true
-                }).profileKey
-                cfg = item.preset.config.retarget(userId, targetPkg, targetMode, key)
-                if (!includeExpert) stripExpert(cfg)
-                disp = item.preset.display
-                wanted = item.preset.name
-            }
-            is ImportItem.BuiltIn -> {
-                cfg = defaultConfig(userId, targetPkg, targetMode).also {
-                    it.baseProfile = item.source.profileKey
-                    it.baseMode = baseMode
-                    it.threadRules = if (includeExpert) 2 else 1
-                }
-                disp = DisplayValues.builtin(targetMode)
-                wanted = item.title
-            }
+        val (cfg, disp) = prepareImport(item, baseMode, targetPkg, targetMode, includeExpert)
+        val wanted = when (item) {
+            is ImportItem.Mine -> item.preset.name
+            is ImportItem.BuiltIn -> item.title
         }
         val targetDisplay = if (adviceContext != null) adviceContext.display.copy(fpsLimit = adviceFps ?: adviceContext.display.fpsLimit) else disp
         val p = if (replaced != null) {

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -43,7 +43,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -171,32 +170,39 @@ fun StepsScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boolea
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        if (wide) {
-            TopBar(
-                stringResource(R.string.steps_title), st.label, leave, Modifier.padding(horizontal = 20.dp),
-                actions = {
-                    TextButton(onClick = useBase, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.steps_use_base)) }
-                    Button(onClick = save, enabled = canSave, modifier = Modifier.heightIn(min = 40.dp)) { Text(stringResource(R.string.save)) }
-                    Spacer(Modifier.width(8.dp))
-                },
-            )
-            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Column(Modifier.width(280.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    steps.forEachIndexed { i, s ->
-                        val on = i == sel
-                        val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, steps.size, 24.dp)
-                        Surface(
-                            shape = itemShape,
-                            color = if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                            contentColor = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, role = Role.Button) { selected = i },
-                        ) {
-                            Column(Modifier.heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
-                                Text(stepTitle(i, s), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-                            }
-                        }
+    @Composable
+    fun stepSelector() {
+        Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            steps.forEachIndexed { i, s ->
+                val on = i == sel
+                val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, steps.size, 24.dp)
+                Surface(
+                    shape = itemShape,
+                    color = if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                    contentColor = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, role = Role.Button) { selected = i },
+                ) {
+                    Column(Modifier.heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
+                        Text(stepTitle(i, s), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
                     }
+                }
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        TopBar(
+            stringResource(R.string.steps_title), st.label, leave, Modifier.padding(horizontal = if (wide) 20.dp else 0.dp),
+            actions = {
+                TextButton(onClick = useBase, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.steps_use_base)) }
+                Button(onClick = save, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
+                Spacer(Modifier.width(8.dp))
+            },
+        )
+        if (wide) {
+            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(Modifier.width(320.dp).verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    stepSelector()
                     if (steps.size < 4 && steps.isNotEmpty()) Box(Modifier.padding(top = 12.dp)) { addStep() }
                     if (!increasing) Text(stringResource(R.string.steps_invalid), Modifier.padding(top = 8.dp, start = 8.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                 }
@@ -209,18 +215,18 @@ fun StepsScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boolea
                 }
             }
         } else {
-            TopBar(stringResource(R.string.steps_title), st.label, leave)
             val scroll = rememberScrollState()
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 Column(
-                    Modifier.widthIn(max = 720.dp).verticalScroll(scroll).padding(16.dp),
+                    Modifier.widthIn(max = 640.dp).verticalScroll(scroll).padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = navBottomPadding() + 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Muted(stringResource(R.string.steps_intro), Modifier.padding(horizontal = 8.dp), MaterialTheme.typography.bodyMedium)
-                    steps.forEachIndexed { i, s ->
+                    stepSelector()
+                    if (steps.isNotEmpty()) {
                         TonalCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                stepBody(i, s)
+                                stepBody(sel, steps[sel])
                             }
                         }
                     }
@@ -228,22 +234,7 @@ fun StepsScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boolea
                     if (!increasing) Text(stringResource(R.string.steps_invalid), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            // Pinned actions; the system bars are already kept clear by the root layout. The divider shows
-            // while steps continue behind the bar.
-            Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer) {
-                Column {
-                    HorizontalDivider(color = if (scroll.canScrollForward) MaterialTheme.colorScheme.outlineVariant else Color.Transparent)
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                        Row(
-                            Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                        ) {
-                            TextButton(onClick = useBase, Modifier.weight(1f, fill = false).heightIn(min = 48.dp)) { Text(stringResource(R.string.steps_use_base)) }
-                            Button(onClick = save, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
-                        }
-                    }
-                }
-            }
+
         }
     }
 

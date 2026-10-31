@@ -110,7 +110,6 @@
     <string name="copy_of_in_use">Copy of %1$s (in use)</string>
     <string name="name_copy">%1$s copy</string>
     <string name="save_name">Save name</string>
-    
     <string name="use_this_preset">Use this preset</string>
     <string name="duplicate">Duplicate</string>
     <string name="duplicate_note">Makes “%1$s” and uses it</string>
@@ -192,8 +191,6 @@
 
     <!-- Tuning -->
     <string name="tuning_sub">%1$s · %2$s · %3$s</string>
-    <string name="starts_from_builtin">Starts from the built-in setting · %1$d changes</string>
-    <string name="starts_from_other">Starts from another setting · %1$d changes</string>
     <string name="speed_and_heat">Clock and heat</string>
     <string name="speed">Clock</string>
     <string name="speed_foot">Higher clocks heat up sooner.</string>
@@ -221,11 +218,6 @@
     <string name="section_advanced_desc">Cores, threads and temperature steps</string>
     <string name="section_low_battery_desc">Reduce tuning at low battery</string>
     <string name="cd_changed_from_default">Changed from default</string>
-    
-    
-    
-    
-    
     <string name="temp_target">Temperature target</string>
     <string name="temp_target_desc">Clocks drop early to stay under this.</string>
     <string name="power_target">Power target</string>
@@ -375,7 +367,6 @@
     <string name="saved_smoothing">Temperature smoothing</string>
 
     <!-- Import -->
-    <string name="for_game">For %1$s</string>
     <string name="your_presets">Your presets</string>
     <string name="your_presets_elsewhere">Your presets in other games</string>
     <string name="builtin_settings">Built-in settings</string>
@@ -613,6 +604,6 @@
     <string name="suggest_title_short">Suggest</string>
     <string name="auto_title_short">Auto</string>
     <string name="all_games">All games</string>
-    
+    <string name="show_details">Show details</string>
     <string name="not_saved_global">Not saved in presets · All games</string>
 </resources>

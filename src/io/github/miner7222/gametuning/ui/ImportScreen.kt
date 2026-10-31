@@ -3,6 +3,8 @@
 
 package io.github.miner7222.gametuning.ui
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,8 +24,11 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.SearchOff
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,13 +53,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.miner7222.gametuning.R
+import io.github.miner7222.gametuning.data.ImportPreview
+import io.github.miner7222.gametuning.data.StepChange
+import io.github.miner7222.gametuning.data.GameNames
 import io.github.miner7222.gametuning.data.GENERIC_PROFILE
 import io.github.miner7222.gametuning.data.Modes
 import io.github.miner7222.gametuning.data.builtinName
@@ -76,7 +88,7 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
     val label = vm.games.label(pkg)
 
     Column(Modifier.fillMaxSize()) {
-        TopBar(stringResource(R.string.import_title), if (wide) stringResource(R.string.for_game, label) else null, { nav.pop() }, Modifier.padding(horizontal = if (wide) 20.dp else 0.dp))
+        TopBar(stringResource(R.string.import_title), label, { nav.pop() }, Modifier.padding(horizontal = if (wide) 20.dp else 0.dp))
         if (src == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@Column
@@ -92,7 +104,7 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         }
 
         @Composable
-        fun itemRow(item: ImportItem, i: Int, n: Int, initial: String, isSel: Boolean) {
+        fun itemRow(item: ImportItem, i: Int, n: Int, isSel: Boolean) {
             val itemShape = if (isSel && wide) RoundedCornerShape(24.dp) else groupShape(i, n, 24.dp)
             Surface(
                 shape = itemShape,
@@ -101,18 +113,27 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                 modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(isSel, role = Role.Button) { selKey = item.key },
             ) {
                 Row(Modifier.heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (!wide) {
-                        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                                    Text(initial, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                }
-                            }
-                        }
+                    val packages = when (item) {
+                        is ImportItem.Mine -> listOf(item.pkg)
+                        is ImportItem.BuiltIn -> (listOf(item.source.profileKey) + item.source.packages.orEmpty()).distinct()
                     }
+                    val iconPkg = remember(item.key) {
+                        packages.firstOrNull { pkg ->
+                            try { ctx.packageManager.getApplicationInfo(pkg, 0); true }
+                            catch (_: android.content.pm.PackageManager.NameNotFoundException) { false }
+                        } ?: packages.firstOrNull().orEmpty()
+                    }
+                    ImportSourceIcon(vm, iconPkg, if (item is ImportItem.Mine) item.gameLabel else item.title, isSel)
                     Column(Modifier.weight(1f)) {
-                        Text(item.title, style = MaterialTheme.typography.bodyLarge)
-                        Muted(item.subtitle)
+                        val regions = packages.mapNotNull { GameNames.region(it) }.distinct()
+                        if (item is ImportItem.Mine) {
+                            Text(item.title, style = MaterialTheme.typography.bodyLarge)
+                            RegionName(item.gameLabel, regions, MaterialTheme.typography.bodySmall)
+                            Muted(ctx.modeName(item.mode))
+                        } else {
+                            RegionName(item.title, regions, MaterialTheme.typography.bodyLarge)
+                            Muted(item.subtitle)
+                        }
                     }
                 }
             }
@@ -122,7 +143,7 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         fun mineList() {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 if (mine.isEmpty()) EmptyState(Icons.Rounded.Download, stringResource(R.string.no_presets_elsewhere), Modifier.fillMaxWidth())
-                mine.forEachIndexed { i, it -> itemRow(it, i, mine.size, it.gameLabel.take(1).uppercase(), it.key == selected?.key) }
+                mine.forEachIndexed { i, it -> itemRow(it, i, mine.size, it.key == selected?.key) }
             }
         }
 
@@ -130,7 +151,7 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         fun builtList() {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 if (built.isEmpty() && query.isNotBlank()) EmptyState(Icons.Rounded.SearchOff, stringResource(R.string.no_matches), Modifier.fillMaxWidth())
-                built.forEachIndexed { i, it -> itemRow(it, i, built.size, it.title.take(1).uppercase(), it.key == selected?.key) }
+                built.forEachIndexed { i, it -> itemRow(it, i, built.size, it.key == selected?.key) }
             }
         }
 
@@ -188,9 +209,16 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
     val ps = vm.profile?.takeIf { it.pkg == pkg }
     val inUse = ps?.libs?.get(into)?.inUse
     val canReplace = inUse != null
-    val rows by produceState<List<String>?>(null, item.key, baseMode) {
-        value = null
-        value = withContext(Dispatchers.IO) { try { vm.importPreview(item, baseMode) } catch (_: Exception) { emptyList() } }
+    var rows by remember(item.key, baseMode, pkg, into, expert, ps) { mutableStateOf<ImportPreview?>(null) }
+    var previewFailed by remember(item.key, baseMode, pkg, into, expert, ps) { mutableStateOf(false) }
+    LaunchedEffect(item.key, baseMode, pkg, into, expert, ps) {
+        try {
+            rows = withContext(Dispatchers.IO) { vm.importPreviewDetails(item, baseMode, pkg, into, expert) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            previewFailed = true
+        }
     }
 
     @Composable
@@ -222,11 +250,24 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
     fun changesBlock() {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SectionLabel(stringResource(R.string.what_it_changes), Modifier.padding(0.dp))
-            val list = rows
-            if (list == null) CircularProgressIndicator(Modifier.size(24.dp))
-            else if (list.isEmpty()) Muted(stringResource(R.string.nothing_changed), style = MaterialTheme.typography.bodyMedium)
-            else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                list.forEach { Tag(it) }
+            val preview = rows
+            if (previewFailed) Muted(stringResource(R.string.save_failed))
+            else if (preview == null) CircularProgressIndicator(Modifier.size(24.dp))
+            else if (preview.changes.isEmpty() && preview.steps.isEmpty()) Muted(stringResource(R.string.nothing_changed), style = MaterialTheme.typography.bodyMedium)
+            else {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    preview.changes.forEach {
+                        Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
+                            Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                Text(it.label, style = MaterialTheme.typography.labelMedium)
+                                Text(it.before + " → " + it.after, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+                if (preview.steps.isNotEmpty()) {
+                    androidx.compose.runtime.key(item.key, baseMode, pkg, into, expert, ps) { StepChanges(preview.steps) }
+                }
             }
         }
     }
@@ -247,10 +288,8 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
         val compact = MaterialTheme.typography.labelMedium
         if (pane) {
             if (item is ImportItem.BuiltIn) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    startFromBlock(Modifier.weight(1.4f), compact)
-                    intoBlock(Modifier.weight(1f), compact)
-                }
+                startFromBlock(Modifier.fillMaxWidth(), compact)
+                intoBlock(Modifier.fillMaxWidth(), compact)
             } else {
                 intoBlock(Modifier.fillMaxWidth(), MaterialTheme.typography.labelLarge)
             }
@@ -279,7 +318,7 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
             Button(onClick = {
                 vm.doImport(item, baseMode, pkg, into, replace && canReplace, expert)
                 nav.pop()
-            }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.add)) }
+            }, Modifier.heightIn(min = 48.dp), enabled = rows != null && !previewFailed && ps?.tuningEnabled == true) { Text(stringResource(R.string.add)) }
         }
     }
 
@@ -295,6 +334,71 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             body()
             footer(Modifier)
+        }
+    }
+}
+
+@Composable
+private fun RegionName(name: String, regions: List<String>, style: androidx.compose.ui.text.TextStyle) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(name, Modifier.weight(1f, fill = false), style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        regions.forEach { Tag(it) }
+    }
+}
+
+@Composable
+private fun ImportSourceIcon(vm: AppViewModel, pkg: String, label: String, selected: Boolean) {
+    val size = 40.dp
+    val px = with(LocalDensity.current) { size.roundToPx() }
+    val icon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, pkg, px) { value = vm.games.icon(pkg, px) }
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier.size(size), shape = RoundedCornerShape(12.dp),
+        color = if (selected) cs.primary else cs.secondaryContainer,
+        contentColor = if (selected) cs.onPrimary else cs.onSecondaryContainer,
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (icon != null) Image(icon!!, null, Modifier.fillMaxSize())
+            else Text(label.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun StepChanges(steps: List<StepChange>) {
+    var expanded by remember { mutableStateOf(false) }
+    val collapsible = steps.size > 1 || steps.sumOf { it.changes.size } > 3
+    Surface(Modifier.fillMaxWidth(), RoundedCornerShape(20.dp), MaterialTheme.colorScheme.surfaceContainer) {
+        Column {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                    .then(if (collapsible) Modifier.clickable(role = Role.Button) { expanded = !expanded } else Modifier)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.steps_title), style = MaterialTheme.typography.titleSmall)
+                    Muted(pluralStringResource(R.plurals.steps_count, steps.size, steps.size))
+                }
+                if (collapsible) Icon(
+                    if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    stringResource(if (expanded) R.string.show_less else R.string.show_details),
+                )
+            }
+            if (!collapsible || expanded) {
+                Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    steps.forEachIndexed { i, step ->
+                        Surface(shape = groupShape(i, steps.size, 12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(step.title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                step.changes.forEach {
+                                    Text(it.label + " " + it.before + " → " + it.after, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
