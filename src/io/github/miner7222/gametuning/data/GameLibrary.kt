@@ -28,8 +28,8 @@ class GameLibrary(private val context: Context) {
     private val resolver = context.contentResolver
     private val packageManager = context.packageManager
 
-    private fun rawEntries(): List<Pair<String, Int>> =
-        Settings.System.getStringForUser(resolver, LIST_KEY, UserHandle.USER_CURRENT)
+    private fun rawEntries(userId: Int = UserHandle.USER_CURRENT): List<Pair<String, Int>> =
+        Settings.System.getStringForUser(resolver, LIST_KEY, userId)
             ?.split(";")
             ?.filter { it.isNotEmpty() }
             ?.map { entry ->
@@ -37,6 +37,10 @@ class GameLibrary(private val context: Context) {
                 if (parts.size == 2) parts[0] to (parts[1].toIntOrNull() ?: GameManager.GAME_MODE_STANDARD)
                 else entry to GameManager.GAME_MODE_STANDARD
             } ?: emptyList()
+
+    /** None is stored as zero, before the UI normalizes unsupported modes to Balanced. */
+    fun isNoneMode(pkg: String, userId: Int = context.userId): Boolean =
+        rawEntries(userId).any { (name, mode) -> name == pkg && mode == 0 }
 
     suspend fun games(): List<GameInfo> = withContext(Dispatchers.IO) {
         rawEntries().mapNotNull { (pkg, mode) ->
@@ -120,7 +124,7 @@ class GameLibrary(private val context: Context) {
     private fun normalizeMode(mode: Int) = if (mode in Modes.ALL.toList()) mode else Modes.BALANCED
 
     companion object {
-        private const val LIST_KEY = "gamespace_game_list"
+        const val LIST_KEY = "gamespace_game_list"
         private const val GAME_SPACE = "io.chaldeaprjkt.gamespace"
     }
 }

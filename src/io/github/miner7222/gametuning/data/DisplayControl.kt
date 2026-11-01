@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package io.github.miner7222.gametuning.data
 
+import android.app.ActivityManager
 import android.app.IGameManagerService
 import android.content.Context
 import android.os.ServiceManager
@@ -18,6 +19,9 @@ import org.evolution.display.RefreshRateManager
  */
 class DisplayControl(private val context: Context) {
     private val userId = context.userId
+    private val games = GameLibrary(context)
+    private val refreshWrites = context.createDeviceProtectedStorageContext()
+        .getSharedPreferences("refresh_writes_u$userId", Context.MODE_PRIVATE)
 
     private fun gameService(): IGameManagerService? = try {
         IGameManagerService.Stub.asInterface(ServiceManager.getService(Context.GAME_SERVICE))
@@ -50,6 +54,10 @@ class DisplayControl(private val context: Context) {
         pkg: String, mode: Int, display: DisplayValues, allow: GameAllowances,
     ): Boolean = withContext(Dispatchers.IO) {
         displayMutex.withLock {
+            if (games.isNoneMode(pkg, userId)) {
+                clearRefreshLocked(pkg)
+                return@withLock true
+            }
             if (!allow.downscaling || !allow.fpsOverride) return@withLock true
             val service = gameService() ?: return@withContext false
             val scaling = if (display.resolution >= 0.9999f) "-1"
@@ -103,15 +111,62 @@ class DisplayControl(private val context: Context) {
         return -1
     }
 
+    /** Releases only a recorded write that still matches an applied or pending value. */
+    private fun clearRefreshLocked(pkg: String) {
+        if (!refreshWrites.contains("$pkg.applied")) return
+        try {
+            // The refresh manager operates on the foreground user's map.
+            if (ActivityManager.getCurrentUser() != userId) return
+            val manager = context.getSystemService(RefreshRateManager::class.java) ?: return
+            val current = manager.getRefreshRateForPackage(pkg).let { if (it > 0) it else -1 }
+            if (current == refreshWrites.getInt("$pkg.applied", -1) ||
+                (refreshWrites.contains("$pkg.pending") && current == refreshWrites.getInt("$pkg.pending", -1))) {
+                val previous = refreshWrites.getInt("$pkg.previous", -1)
+                if (previous != current) {
+                    if (previous > 0) manager.setRefreshRateForPackage(pkg, previous)
+                    else if (current > 0) manager.unsetRefreshRateForPackage(pkg)
+                    val restored = manager.getRefreshRateForPackage(pkg).let { if (it > 0) it else -1 }
+                    if (restored != previous) return
+                }
+            }
+            // A later edit by another owner wins, even when we still have a saved value.
+            refreshWrites.edit().remove("$pkg.previous").remove("$pkg.applied")
+                .remove("$pkg.pending").commit()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not release the per-app refresh rate", e)
+        }
+    }
+
+    /** Checks None before a UI operation and releases any refresh override owned by this app. */
+    suspend fun clearRefreshIfNone(pkg: String): Boolean = withContext(Dispatchers.IO) {
+        displayMutex.withLock {
+            if (!games.isNoneMode(pkg, userId)) return@withLock false
+            clearRefreshLocked(pkg)
+            true
+        }
+    }
+
+    /** Also runs at service startup so persistent writes are handled after a restart. */
+    suspend fun clearNoneRefresh() {
+        for (key in refreshWrites.all.keys.filter { it.endsWith(".applied") }) {
+            clearRefreshIfNone(key.removeSuffix(".applied"))
+        }
+    }
+
     /**
      * Applies the refresh rate part of a preset through the ROM's per-app refresh rate setting: the
      * lock uses the highest mode, a frame rate limit uses the smallest mode that is not below it,
-     * so a limit above the system peak rate still gets its rate. Nothing asked removes the entry.
+     * so a limit above the system peak rate still gets its rate. No target releases only our write.
      */
     suspend fun applyRefresh(pkg: String, mode: Int) =
         withContext(Dispatchers.IO) {
             displayMutex.withLock {
                 try {
+                    if (games.isNoneMode(pkg, userId)) {
+                        clearRefreshLocked(pkg)
+                        return@withLock
+                    }
+                    if (ActivityManager.getCurrentUser() != userId) return@withLock
                     // Refresh settings are package-wide. Serialize with temporary mode switches above.
                     if (gameService()?.getGameMode(pkg, userId) != mode) return@withLock
                     val tuning = GameTuningRepository(context).tunings().firstOrNull {
@@ -124,12 +179,25 @@ class DisplayControl(private val context: Context) {
                     val manager = context.getSystemService(RefreshRateManager::class.java) ?: return@withContext
                     val target = refreshTarget(display, fpsAllowed)
                     if (gameService()?.getGameMode(pkg, userId) != mode) return@withLock
-                    val current = manager.getRefreshRateForPackage(pkg)
-                    if (target > 0) {
-                        if (current != target) manager.setRefreshRateForPackage(pkg, target)
-                    } else if (current > 0) {
-                        manager.unsetRefreshRateForPackage(pkg)
+                    if (games.isNoneMode(pkg, userId)) {
+                        clearRefreshLocked(pkg)
+                        return@withLock
                     }
+                    if (target <= 0) {
+                        clearRefreshLocked(pkg)
+                        return@withLock
+                    }
+                    val current = manager.getRefreshRateForPackage(pkg).let { if (it > 0) it else -1 }
+                    if (current == target) return@withLock
+                    val owned = refreshWrites.contains("$pkg.applied") &&
+                        (refreshWrites.getInt("$pkg.applied", -1) == current ||
+                            (refreshWrites.contains("$pkg.pending") && refreshWrites.getInt("$pkg.pending", -1) == current))
+                    val previous = if (owned) refreshWrites.getInt("$pkg.previous", -1) else current
+                    // Keep both sides of an unfinished write so a restart can release either value.
+                    if (!refreshWrites.edit().putInt("$pkg.previous", previous)
+                            .putInt("$pkg.applied", current).putInt("$pkg.pending", target).commit()) return@withLock
+                    manager.setRefreshRateForPackage(pkg, target)
+                    refreshWrites.edit().putInt("$pkg.applied", target).remove("$pkg.pending").commit()
                 } catch (e: Exception) {
                     Log.w(TAG, "Could not change the per-app refresh rate", e)
                 }

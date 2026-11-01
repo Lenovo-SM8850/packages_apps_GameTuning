@@ -576,4 +576,5 @@
     <string name="obs_unused">%1$s mostly ran below half its top speed.</string>
     <string name="obs_met">The game kept its %1$d fps target, so nothing needs to change.</string>
     <string name="obs_none">Nothing in this record points to a change.</string>
+    <string name="tuning_off_none">Performance tuning is off because Game Space is set to None.</string>
 </resources>

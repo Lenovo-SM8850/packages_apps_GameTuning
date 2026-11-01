@@ -191,6 +191,12 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
 
     private fun s(id: Int, vararg args: Any) = app.getString(id, *args)
 
+    private class NoneModeException : RuntimeException()
+
+    private suspend fun requireTuningEnabled(pkg: String) {
+        if (displayControl.clearRefreshIfNone(pkg)) throw NoneModeException()
+    }
+
     /** Runs [block] off the main thread, one at a time, and turns daemon errors into a message. */
     private fun launchLocked(block: suspend () -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -210,6 +216,9 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             block()
         } catch (e: CancellationException) {
             throw e
+        } catch (_: NoneModeException) {
+            runCatching { reloadLocked() }
+            say(s(R.string.tuning_off_none))
         } catch (e: TuningException) {
             say(s(R.string.save_failed))
             runCatching { reloadLocked() }
@@ -272,6 +281,8 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         var list = store.list(pkg, mode)
         val t = tunings.firstOrNull { it.packageName == pkg && it.mode == mode && it.enabled }
             ?: return ModeLibrary(list, null)
+        // Reading a None game's state must not migrate its daemon configuration or local presets.
+        if (games.isNoneMode(pkg, userId)) return ModeLibrary(list, t.variantId?.takeIf { it.isNotEmpty() })
         val id = t.variantId.orEmpty().ifEmpty { newPresetId() }
         val old = list.firstOrNull { it.id == id }
         val name = t.variantName.orEmpty().ifEmpty { old?.name ?: uniqueName(list, s(R.string.current_setting)) }
@@ -351,6 +362,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun setMode(pkg: String, mode: Int) = launchLocked {
+        requireTuningEnabled(pkg)
         games.setMode(pkg, mode)
         displayControl.applyRefresh(pkg, mode)
         reloadLocked()
@@ -377,11 +389,17 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     private suspend fun restore(snaps: List<Snap>) {
         mutex.withLock {
             handleFailure {
+                var noneSkipped = false
                 for (sn in snaps) {
+                    if (displayControl.clearRefreshIfNone(sn.pkg)) {
+                        noneSkipped = true
+                        continue
+                    }
                     store.replaceAll(sn.pkg, sn.mode, sn.presets)
                     activate(sn.pkg, sn.mode, sn.presets.firstOrNull { it.id == sn.inUseId })
                 }
                 reloadLocked()
+                if (noneSkipped) say(s(R.string.tuning_off_none))
             }
         }
     }
@@ -389,6 +407,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     private fun undoFor(vararg snaps: Snap): suspend () -> Unit = { restore(snaps.toList()) }
 
     private suspend fun applyDisplay(pkg: String, mode: Int, d: DisplayValues, allow: GameAllowances) {
+        requireTuningEnabled(pkg)
         val ok = displayControl.applyGameManager(pkg, mode, d, allow)
         displayControl.applyRefresh(pkg, mode)
         if (!ok) say(s(R.string.display_apply_failed))
@@ -396,6 +415,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
 
     /** Makes [preset] (or the built-in setting when null) the one in use for a profile. */
     private suspend fun activate(pkg: String, mode: Int, preset: Preset?) {
+        requireTuningEnabled(pkg)
         val allow = games.allowances(pkg)
         if (preset == null) {
             repo.clearTuning(pkg, mode)
@@ -418,6 +438,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun usePreset(pkg: String, mode: Int, id: String?, andThen: (() -> Unit)? = null) = launchLocked {
+        requireTuningEnabled(pkg)
         val before = snapshot(pkg, mode)
         val preset = before.presets.firstOrNull { it.id == id }
         activate(pkg, mode, preset)
@@ -440,6 +461,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     fun canAddPreset(pkg: String, mode: Int) = store.list(pkg, mode).size + 1 < MAX_PRESETS
 
     fun createPreset(pkg: String, mode: Int, name: String, fromBuiltin: Boolean) = launchLocked {
+        requireTuningEnabled(pkg)
         val lib = buildLibrary(pkg, mode, repo.tunings())
         if (lib.presets.size + 1 >= MAX_PRESETS) {
             say(s(R.string.preset_limit))
@@ -458,6 +480,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun duplicatePreset(pkg: String, mode: Int, id: String) = launchLocked {
+        requireTuningEnabled(pkg)
         val lib = buildLibrary(pkg, mode, repo.tunings())
         val src = lib.presets.firstOrNull { it.id == id } ?: return@launchLocked
         if (lib.presets.size + 1 >= MAX_PRESETS) {
@@ -474,6 +497,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun renamePreset(pkg: String, mode: Int, id: String, name: String) = launchLocked {
+        requireTuningEnabled(pkg)
         val lib = buildLibrary(pkg, mode, repo.tunings())
         val src = lib.presets.firstOrNull { it.id == id } ?: return@launchLocked
         val clean = name.trim().take(64)
@@ -488,6 +512,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun deletePreset(pkg: String, mode: Int, id: String) = launchLocked {
+        requireTuningEnabled(pkg)
         val lib = buildLibrary(pkg, mode, repo.tunings())
         val before = Snap(pkg, mode, lib.presets, lib.inUseId)
         if (lib.inUseId == id) activate(pkg, mode, null)
@@ -510,6 +535,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     ) {
         val st = tuning ?: return
         launchLocked {
+            requireTuningEnabled(st.pkg)
             val before = snapshot(st.pkg, st.mode)
             val lib = buildLibrary(st.pkg, st.mode, repo.tunings())
             val cfg = (lib.inUse?.config?.deepCopy() ?: defaultConfig(userId, st.pkg, st.mode)).also { it.ensureArrays() }
@@ -543,6 +569,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val st = tuning ?: return
         val preset = st.preset ?: return
         launchLocked {
+            requireTuningEnabled(st.pkg)
             val stable = store.stableConfig(st.pkg, st.mode, preset.id) ?: return@launchLocked
             val before = snapshot(st.pkg, st.mode)
             val restored = Preset(preset.id, preset.name, stable, preset.display)
@@ -557,6 +584,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val st = tuning ?: return
         val preset = st.preset ?: return
         launchLocked {
+            requireTuningEnabled(st.pkg)
             val before = snapshot(st.pkg, st.mode)
             val fresh = Preset(preset.id, preset.name, defaultConfig(userId, st.pkg, st.mode), DisplayValues.builtin(st.mode))
             store.upsert(st.pkg, st.mode, fresh)
@@ -567,6 +595,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun resetGame(pkg: String) = launchLocked {
+        requireTuningEnabled(pkg)
         val befores = Modes.ALL.map { snapshot(pkg, it) }
         for (m in Modes.ALL) activate(pkg, m, null)
         store.clearGame(pkg)
@@ -601,7 +630,13 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val befores = ArrayList<Snap>()
         var added = 0
         var skipped = 0
+        var noneSkipped = false
         for (t in req.targets) {
+            if (displayControl.clearRefreshIfNone(t.pkg)) {
+                skipped++
+                noneSkipped = true
+                continue
+            }
             val sameGame = t.pkg == req.srcPkg
             val before = snapshot(t.pkg, t.mode)
             befores.add(before)
@@ -627,7 +662,8 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             if (req.startUsing || inUseThere) activate(t.pkg, t.mode, target)
         }
         reloadLocked()
-        say(if (skipped > 0) s(R.string.copy_partial, added, skipped) else s(R.string.copy_done, added), undoFor(*befores.toTypedArray()))
+        if (noneSkipped) say(s(R.string.tuning_off_none), undoFor(*befores.toTypedArray()))
+        else say(if (skipped > 0) s(R.string.copy_partial, added, skipped) else s(R.string.copy_done, added), undoFor(*befores.toTypedArray()))
     }
 
     private fun builtInItem(src: ProfileSource): ImportItem.BuiltIn {
@@ -685,6 +721,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         item: ImportItem, baseMode: Int, targetPkg: String, targetMode: Int,
         replaceInUse: Boolean, includeExpert: Boolean, nameOverride: String? = null,
     ) = launchLocked {
+        requireTuningEnabled(targetPkg)
         val lib = buildLibrary(targetPkg, targetMode, repo.tunings())
         val before = Snap(targetPkg, targetMode, lib.presets, lib.inUseId)
         val replacing = replaceInUse && lib.inUse != null
@@ -982,6 +1019,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
      */
     fun applyAutoTune(info: RecordingInfo, plan: AutoPlan, asNew: Boolean, name: String) = launchLocked {
         val pkg = info.packageName
+        requireTuningEnabled(pkg)
         val mode = info.mode
         val lib = buildLibrary(pkg, mode, repo.tunings())
         val inUse = lib.inUse

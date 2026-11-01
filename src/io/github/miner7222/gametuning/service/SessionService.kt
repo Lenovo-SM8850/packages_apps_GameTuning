@@ -2,8 +2,11 @@
 package io.github.miner7222.gametuning.service
 
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.database.ContentObserver
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
@@ -11,10 +14,12 @@ import android.os.Looper
 import android.os.RemoteException
 import android.os.ServiceManager
 import android.os.ServiceSpecificException
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.DisplayControl
+import io.github.miner7222.gametuning.data.GameLibrary
 import io.github.miner7222.gametuning.data.GameTuningRepository
 import kotlinx.coroutines.runBlocking
 import vendor.lenovo.hardware.gametuning.IGameTuning
@@ -36,6 +41,13 @@ class SessionService : Service() {
     private var daemonBinder: IBinder? = null
     private var retryDelayMs = RETRY_MIN_MS
     private var noticeFor: String? = null
+    private lateinit var gameListObserver: ContentObserver
+
+    private val userSwitchReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            handler.post { clearNoneRefresh() }
+        }
+    }
 
     private val listener = object : ISessionListener.Stub() {
         override fun onSessionChanged(userId: Int, packageName: String?, mode: Int, active: Boolean, recording: Boolean) {
@@ -65,6 +77,16 @@ class SessionService : Service() {
         super.onCreate()
         worker.start()
         handler = Handler(worker.looper)
+        gameListObserver = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean) {
+                clearNoneRefresh()
+            }
+        }
+        contentResolver.registerContentObserver(
+            Settings.System.getUriFor(GameLibrary.LIST_KEY), false, gameListObserver, userId,
+        )
+        registerReceiver(userSwitchReceiver, IntentFilter(Intent.ACTION_USER_SWITCHED), Context.RECEIVER_NOT_EXPORTED)
+        handler.post { clearNoneRefresh() }
         handler.post(connectTask)
     }
 
@@ -76,6 +98,8 @@ class SessionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        contentResolver.unregisterContentObserver(gameListObserver)
+        unregisterReceiver(userSwitchReceiver)
         handler.post {
             try {
                 daemonBinder?.unlinkToDeath(death, 0)
@@ -135,6 +159,11 @@ class SessionService : Service() {
 
     private fun onSession(pkg: String, mode: Int, active: Boolean, recording: Boolean) {
         if (!active) {
+            try {
+                runBlocking { DisplayControl(this@SessionService).clearRefreshIfNone(pkg) }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not release the session refresh rate", e)
+            }
             if (noticeFor == pkg) noticeFor = null
             return
         }
@@ -155,6 +184,14 @@ class SessionService : Service() {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Could not apply the session refresh rate", e)
+        }
+    }
+
+    private fun clearNoneRefresh() {
+        try {
+            runBlocking { DisplayControl(this@SessionService).clearNoneRefresh() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not release refresh rates for None games", e)
         }
     }
 
