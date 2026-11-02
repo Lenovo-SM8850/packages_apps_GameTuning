@@ -52,6 +52,7 @@
     <string name="mode_maximum">Maximum</string>
     <string name="builtin_setting">Built-in setting</string>
     <string name="builtin_game">Built-in · Game</string>
+    <string name="builtin_archived">Built-in · %1$s</string>
     <string name="builtin_generic">Built-in · Generic</string>
     <string name="builtin_diff">Game default, no adjustments</string>
     <string name="diff_none">Game default, no adjustments</string>

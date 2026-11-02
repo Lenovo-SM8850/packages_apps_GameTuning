@@ -63,7 +63,30 @@ class Preset(
     val name: String,
     val config: GameTuningConfig,
     val display: DisplayValues,
+    /** Immutable daemon transition key; user-created copies have no archive origin. */
+    val archiveOrigin: String? = null,
 )
+
+fun List<Preset>.customCount(): Int = count { it.archiveOrigin == null }
+
+data class BuiltinTransition(val key: String, val generation: Long, val version: String)
+data class BuiltinCheckpoint(val generation: Long, val display: DisplayValues)
+data class BuiltinSyncUpdate(val pkg: String, val mode: Int, val transitions: List<BuiltinTransition>)
+
+/** Names are limited by the daemon in UTF-8 bytes, including the collision suffix. */
+fun archivePresetName(label: String, existing: List<Preset>): String {
+    val names = existing.map { it.name }.toSet()
+    var n = 1
+    while (true) {
+        val suffix = if (n == 1) "" else " $n"
+        var stem = label.filter { it >= ' ' && it != '\u007f' }
+        while ((stem + suffix).toByteArray(Charsets.UTF_8).size > 64)
+            stem = stem.dropLast(if (stem.last().isLowSurrogate() && stem.length > 1) 2 else 1)
+        val name = stem + suffix
+        if (name !in names) return name
+        n++
+    }
+}
 
 /** Everything the app keeps for one (game, profile). */
 class ModeLibrary(

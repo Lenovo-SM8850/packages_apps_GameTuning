@@ -85,15 +85,34 @@ class GameTuningRepository(private val context: Context) {
     suspend fun limits(): PolicyLimits {
         limitsCache?.let { return it }
         val l = call { it.limits }
-        limitsCache = l
+        if (l.goldKHz?.isNotEmpty() == true && l.primeKHz?.isNotEmpty() == true &&
+            l.gpuHz?.isNotEmpty() == true && l.goldCores > 0 && l.primeCores > 0) limitsCache = l
         return l
     }
 
-    suspend fun profileSources(): List<ProfileSource> = call { it.profileSources }.map { source ->
+    private suspend fun allProfileSources(): List<ProfileSource> = call { it.profileSources }.toList()
+
+    suspend fun profileSources(): List<ProfileSource> = allProfileSources()
+        .filterNot { it.profileKey.startsWith("@builtin/") }.map { source ->
         if (source.profileKey != GENERIC_PROFILE) {
             source.displayName = GameLibrary(context).label(source.profileKey, source.displayName.orEmpty())
         }
         source
+    }
+
+    /** Reads one transition per Binder call without changing tuning or display settings. */
+    suspend fun syncBuiltins() = withContext(Dispatchers.IO) {
+        val sources = allProfileSources()
+        if (sources.any { it.profileKey == "@builtin/pending" })
+            throw TuningException(TuningException.UNAVAILABLE, "Built-in snapshot pending")
+        val marker = sources.firstOrNull { it.profileKey.startsWith("@builtin/current/") }
+            ?.profileKey ?: return@withContext
+        val store = PresetStore.getInstance(context)
+        val games = GameLibrary(context)
+        syncBuiltinHistory(store, userId, marker, games.gamesForUser(userId).map { it.packageName to it.mode },
+            { !games.isNoneMode(it, userId) }, { key, mode -> sourceProfile(key, mode) }) {
+                context.getString(io.github.miner7222.gametuning.R.string.builtin_archived, it)
+            }
     }
 
     /** Packages that have a built-in profile of their own; every other game uses the generic one. */
@@ -178,6 +197,47 @@ class GameTuningRepository(private val context: Context) {
     }
 
     companion object {
+        /** Shared by the Binder-backed sync pass and the host protocol integration check. */
+        suspend fun syncBuiltinHistory(store: PresetStore, userId: Int, marker: String,
+            games: List<Pair<String, Int>>, enabled: (String) -> Boolean,
+            source: suspend (String, Int) -> PolicyProfile, label: (String) -> String) {
+            val parts = marker.split('/')
+            require(parts.size == 4 && parts[0] == "@builtin" && parts[1] == "current" &&
+                parts[2].matches(Regex("[0-9a-f]{32}"))) { "Invalid archive epoch" }
+            val epoch = parts[2]
+            val generation = parts[3].toLongOrNull()?.takeIf { it > 0 }
+                ?: throw IllegalArgumentException("Invalid archive generation")
+            val previousEpoch = store.builtinEpoch()
+            if (previousEpoch == epoch) require(generation >= store.builtinGeneration()) { "Archive generation regressed" }
+            val updates = ArrayList<BuiltinSyncUpdate>()
+            for ((pkg, gameMode) in games) {
+                if (gameMode == Modes.NONE || !enabled(pkg)) continue
+                for (mode in Modes.ALL) {
+                    val checkpoint = if (epoch == previousEpoch) store.builtinCheckpoint(pkg, mode) else null
+                    if (checkpoint != null && checkpoint.generation == generation) continue
+                    if (checkpoint != null) require(checkpoint.generation < generation) { "Archive generation regressed" }
+                    val transitions = ArrayList<BuiltinTransition>()
+                    if (checkpoint != null) {
+                        var after = checkpoint.generation
+                        while (after < generation) {
+                            val next = source("@builtin/history/$epoch/$pkg/$after", mode)
+                            if (next.profileKey.isNullOrEmpty()) break
+                            val g = next.variantId?.toLongOrNull()
+                                ?: throw IllegalArgumentException("Invalid archive generation")
+                            require(g > after && g <= generation && next.profileKey.startsWith("@builtin/$epoch/$g/")) {
+                                "Invalid archive transition"
+                            }
+                            transitions.add(BuiltinTransition(next.profileKey, g, next.variantName.orEmpty()))
+                            after = g
+                        }
+                    }
+                    updates.add(BuiltinSyncUpdate(pkg, mode, transitions))
+                }
+            }
+            val eligible = updates.filter { enabled(it.pkg) }
+            if (eligible.isNotEmpty() || epoch != previousEpoch || generation != store.builtinGeneration())
+                store.syncBuiltinsBatch(epoch, generation, eligible, userId, previousEpoch, label)
+        }
         const val NAME = "vendor.lenovo.hardware.gametuning.IGameTuning/default"
         private const val TAG = "GameTuning"
         private const val PAGE = 600

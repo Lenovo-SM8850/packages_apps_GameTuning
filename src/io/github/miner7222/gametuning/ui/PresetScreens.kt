@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.Change
 import io.github.miner7222.gametuning.data.MAX_PRESETS
+import io.github.miner7222.gametuning.data.customCount
 import io.github.miner7222.gametuning.data.Modes
 import io.github.miner7222.gametuning.data.Preset
 import io.github.miner7222.gametuning.data.Resource
@@ -123,10 +124,10 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
     }
     val lib = ps.libs[mode]!!
     val entries: List<Preset?> = listOf<Preset?>(null) + lib.presets
-    val count = entries.size
+    val count = lib.presets.customCount() + 1
     val selId = selected?.takeIf { s -> entries.any { (it?.id ?: BUILTIN) == s } } ?: (lib.inUseId ?: BUILTIN)
     val sel = entries.firstOrNull { (it?.id ?: BUILTIN) == selId }
-    val tabs = Modes.ALL.map { m -> m to ctx.modeName(m) + " · " + (ps.libs[m]!!.presets.size + 1) }
+    val tabs = Modes.ALL.map { m -> m to ctx.modeName(m) + " · " + (ps.libs[m]!!.presets.customCount() + 1) }
 
     val subtitle = stringResource(R.string.presets_sub, ps.label, count, MAX_PRESETS, ctx.modeName(mode))
 

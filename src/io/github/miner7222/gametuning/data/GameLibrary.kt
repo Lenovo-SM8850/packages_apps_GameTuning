@@ -42,8 +42,10 @@ class GameLibrary(private val context: Context) {
     fun isNoneMode(pkg: String, userId: Int = context.userId): Boolean =
         rawEntries(userId).any { (name, mode) -> name == pkg && mode == Modes.NONE }
 
-    suspend fun games(): List<GameInfo> = withContext(Dispatchers.IO) {
-        rawEntries().mapNotNull { (pkg, mode) ->
+    suspend fun games(): List<GameInfo> = gamesForUser(UserHandle.USER_CURRENT)
+
+    suspend fun gamesForUser(userId: Int): List<GameInfo> = withContext(Dispatchers.IO) {
+        rawEntries(userId).mapNotNull { (pkg, mode) ->
             val info = try {
                 packageManager.getApplicationInfo(pkg, 0)
             } catch (_: PackageManager.NameNotFoundException) {

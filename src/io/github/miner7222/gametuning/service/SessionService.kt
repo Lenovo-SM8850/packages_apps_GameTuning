@@ -35,6 +35,8 @@ import vendor.lenovo.hardware.gametuning.ISessionListener
  */
 class SessionService : Service() {
     private val worker = HandlerThread("GameTuningSession")
+    private val archiveWorker = HandlerThread("GameTuningArchive", android.os.Process.THREAD_PRIORITY_BACKGROUND)
+    private lateinit var archiveHandler: Handler
     private lateinit var handler: Handler
     private val main = Handler(Looper.getMainLooper())
 
@@ -74,14 +76,33 @@ class SessionService : Service() {
     }
 
     private val connectTask = Runnable { connect() }
+    private val archiveTask = Runnable { syncBuiltins() }
+
+    private fun scheduleArchiveSync() {
+        archiveHandler.removeCallbacks(archiveTask)
+        archiveHandler.postDelayed(archiveTask, 1000)
+    }
+
+    private fun syncBuiltins() {
+        archiveHandler.removeCallbacks(archiveTask)
+        try {
+            runBlocking { GameTuningRepository(this@SessionService).syncBuiltins() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not synchronize built-in history", e)
+            archiveHandler.postDelayed(archiveTask, RETRY_MAX_MS)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         worker.start()
+        archiveWorker.start()
+        archiveHandler = Handler(archiveWorker.looper)
         handler = Handler(worker.looper)
         gameListObserver = object : ContentObserver(handler) {
             override fun onChange(selfChange: Boolean) {
                 clearNoneRefresh()
+                scheduleArchiveSync()
             }
         }
         contentResolver.registerContentObserver(
@@ -100,6 +121,8 @@ class SessionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        archiveHandler.removeCallbacks(archiveTask)
+        archiveWorker.quitSafely()
         contentResolver.unregisterContentObserver(gameListObserver)
         unregisterReceiver(userSwitchReceiver)
         handler.post {
@@ -122,7 +145,7 @@ class SessionService : Service() {
 
     /** Registers the listener; a failed attempt is retried with a growing delay. */
     private fun connect() {
-        if (daemon != null) return
+        if (daemon != null) { scheduleArchiveSync(); return }
         try {
             if (!ServiceManager.isDeclared(GameTuningRepository.NAME)) {
                 stopSelf()
@@ -144,6 +167,7 @@ class SessionService : Service() {
             daemon = svc
             daemonBinder = binder
             retryDelayMs = RETRY_MIN_MS
+            scheduleArchiveSync()
         } catch (e: RemoteException) {
             Log.w(TAG, "Cannot register the session listener: ${e.message}")
             scheduleConnect(retryDelayMs)

@@ -23,6 +23,7 @@ import io.github.miner7222.gametuning.data.GameLibrary
 import io.github.miner7222.gametuning.data.GameTuningRepository
 import io.github.miner7222.gametuning.data.KEEP
 import io.github.miner7222.gametuning.data.MAX_PRESETS
+import io.github.miner7222.gametuning.data.customCount
 import io.github.miner7222.gametuning.data.RecordExport
 import io.github.miner7222.gametuning.data.ModeLibrary
 import io.github.miner7222.gametuning.data.Modes
@@ -278,6 +279,9 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         launchLocked {
             available = repo.isAvailable()
             if (available == true) {
+                try { repo.syncBuiltins() } catch (e: Exception) {
+                    android.util.Log.w("GameTuning", "Could not synchronize built-in history", e)
+                }
                 lowBatteryPct = repo.globals().lowBatteryPercent
                 reloadLocked()
             }
@@ -336,7 +340,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         }
         if (t.variantId.isNullOrEmpty()) repo.setTuning(cfg)
         // The daemon may have committed a change whose local file write failed, even for this ID.
-        val current = Preset(id, name, cfg, old?.display ?: DisplayValues.builtin(mode))
+        val current = Preset(id, name, cfg, old?.display ?: DisplayValues.builtin(mode), old?.archiveOrigin)
         if (old == null || old.name != name || old.config.toBase64() != cfg.toBase64()) {
             try {
                 store.upsert(pkg, mode, current)
@@ -494,7 +498,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         }
         val normalized = repo.setTuning(cfg)
         normalized.ensureArrays()
-        store.upsert(pkg, mode, Preset(preset.id, preset.name, normalized, preset.display))
+        store.upsert(pkg, mode, Preset(preset.id, preset.name, normalized, preset.display, preset.archiveOrigin))
         applyDisplay(pkg, mode, preset.display, allow)
     }
 
@@ -519,12 +523,12 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         return "$wanted $n"
     }
 
-    fun canAddPreset(pkg: String, mode: Int) = store.list(pkg, mode).size + 1 < MAX_PRESETS
+    fun canAddPreset(pkg: String, mode: Int) = store.list(pkg, mode).customCount() + 1 < MAX_PRESETS
 
     fun createPreset(pkg: String, mode: Int, name: String, fromBuiltin: Boolean) = launchLocked {
         requireTuningEnabled(pkg)
         val lib = buildLibrary(pkg, mode, repo.tunings())
-        if (lib.presets.size + 1 >= MAX_PRESETS) {
+        if (lib.presets.customCount() + 1 >= MAX_PRESETS) {
             say(s(R.string.preset_limit))
             return@launchLocked
         }
@@ -544,7 +548,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         requireTuningEnabled(pkg)
         val lib = buildLibrary(pkg, mode, repo.tunings())
         val src = lib.presets.firstOrNull { it.id == id } ?: return@launchLocked
-        if (lib.presets.size + 1 >= MAX_PRESETS) {
+        if (lib.presets.customCount() + 1 >= MAX_PRESETS) {
             say(s(R.string.preset_limit))
             return@launchLocked
         }
@@ -565,7 +569,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         if (clean.isEmpty() || clean == src.name) return@launchLocked
         val before = Snap(pkg, mode, lib.presets, lib.inUseId)
         val finalName = uniqueName(lib.presets.filter { it.id != id }, clean)
-        val renamed = Preset(id, finalName, src.config.deepCopy().also { it.variantName = finalName }, src.display)
+        val renamed = Preset(id, finalName, src.config.deepCopy().also { it.variantName = finalName }, src.display, src.archiveOrigin)
         store.upsert(pkg, mode, renamed)
         if (lib.inUseId == id) activate(pkg, mode, renamed)
         reloadLocked()
@@ -603,7 +607,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             val oldDisplay = lib.inUse?.display ?: DisplayValues.builtin(st.mode)
             val newDisplay = change(cfg, oldDisplay, st)
             val existing = lib.inUse
-            if (existing == null && lib.presets.size + 1 >= MAX_PRESETS) {
+            if (existing == null && lib.presets.customCount() + 1 >= MAX_PRESETS) {
                 say(s(R.string.preset_limit))
                 return@launchLocked
             }
@@ -617,7 +621,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             cfg.variantName = name
             val normalized = repo.setTuning(cfg)
             normalized.ensureArrays()
-            store.upsert(st.pkg, st.mode, Preset(id, name, normalized, newDisplay))
+            store.upsert(st.pkg, st.mode, Preset(id, name, normalized, newDisplay, existing?.archiveOrigin))
             if (newDisplay != oldDisplay || existing == null) {
                 applyDisplay(st.pkg, st.mode, newDisplay, st.allow)
             }
@@ -633,7 +637,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             requireTuningEnabled(st.pkg)
             val stable = store.stableConfig(st.pkg, st.mode, preset.id) ?: return@launchLocked
             val before = snapshot(st.pkg, st.mode)
-            val restored = Preset(preset.id, preset.name, stable, preset.display)
+            val restored = Preset(preset.id, preset.name, stable, preset.display, preset.archiveOrigin)
             store.upsert(st.pkg, st.mode, restored)
             activate(st.pkg, st.mode, restored)
             reloadLocked()
@@ -647,7 +651,10 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         launchLocked {
             requireTuningEnabled(st.pkg)
             val before = snapshot(st.pkg, st.mode)
-            val fresh = Preset(preset.id, preset.name, defaultConfig(userId, st.pkg, st.mode), DisplayValues.builtin(st.mode))
+            val config = defaultConfig(userId, st.pkg, st.mode).also {
+                preset.archiveOrigin?.let { origin -> it.baseProfile = origin }
+            }
+            val fresh = Preset(preset.id, preset.name, config, DisplayValues.builtin(st.mode), preset.archiveOrigin)
             store.upsert(st.pkg, st.mode, fresh)
             activate(st.pkg, st.mode, fresh)
             reloadLocked()
@@ -709,9 +716,9 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             val replacing = existing != null && "${t.pkg}|${t.mode}" in req.replace
             val target: Preset
             if (replacing) {
-                target = Preset(existing!!.id, existing.name, cfg, src.display)
+                target = Preset(existing!!.id, existing.name, cfg, src.display, existing.archiveOrigin)
             } else {
-                if (list.size + 1 >= MAX_PRESETS) {
+                if (list.customCount() + 1 >= MAX_PRESETS) {
                     skipped++
                     continue
                 }
@@ -807,7 +814,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val before = Snap(targetPkg, targetMode, lib.presets, lib.inUseId)
         val replaced = if (replaceId != null) lib.presets.firstOrNull { it.id == replaceId } else if (replaceInUse) lib.inUse else null
         val replacing = replaced != null
-        if (!replacing && lib.presets.size + 1 >= MAX_PRESETS) {
+        if (!replacing && lib.presets.customCount() + 1 >= MAX_PRESETS) {
             say(s(R.string.preset_limit))
             return@launchLocked
         }
@@ -836,7 +843,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         }
         val targetDisplay = if (adviceContext != null) adviceContext.display.copy(fpsLimit = adviceFps ?: adviceContext.display.fpsLimit) else disp
         val p = if (replaced != null) {
-            Preset(replaced.id, replaced.name, cfg, targetDisplay)
+            Preset(replaced.id, replaced.name, cfg, targetDisplay, replaced.archiveOrigin)
         } else {
             val chosen = nameOverride?.trim()?.takeIf { it.isNotEmpty() } ?: wanted
             Preset(newPresetId(), uniqueName(lib.presets, chosen.take(64)), cfg, targetDisplay)
@@ -1156,7 +1163,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val lib = buildLibrary(pkg, mode, repo.tunings())
         val recorded = recordPresetIn(lib.presets, info)
         val before = Snap(pkg, mode, lib.presets, lib.inUseId)
-        if ((asNew || recorded == null) && lib.presets.size + 1 >= MAX_PRESETS) {
+        if ((asNew || recorded == null) && lib.presets.customCount() + 1 >= MAX_PRESETS) {
             say(s(R.string.preset_limit)); return@launchLocked
         }
         val replacing = !asNew && recorded != null
@@ -1164,7 +1171,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val finalName = if (replacing) recorded!!.name else uniqueName(lib.presets, name.trim().take(64).ifEmpty { s(R.string.new_preset) })
         val cfg = plan.proposal.tuning.deepCopy().also { it.variantId = id; it.variantName = finalName }
         val display = plan.context.display.copy(fpsLimit = plan.fpsLimit ?: plan.context.display.fpsLimit)
-        val preset = Preset(id, finalName, cfg, display)
+        val preset = Preset(id, finalName, cfg, display, if (asNew) null else recorded?.archiveOrigin)
         val displayBefore = applyAdvice(before, preset, plan.fpsLimit != null)
         if (replacing) store.setStable(pkg, mode, recorded!!.id, recorded.config)
         reloadLocked()
@@ -1220,7 +1227,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
                 it.variantId = preset.id; it.variantName = preset.name
             }
             applied = repo.setTuning(cfg).also { it.ensureArrays() }
-            val stored = Preset(preset.id, preset.name, applied, preset.display)
+            val stored = Preset(preset.id, preset.name, applied, preset.display, preset.archiveOrigin)
             store.upsert(pkg, mode, stored)
             if (!displayControl.applyGameManager(pkg, mode, preset.display, games.allowances(pkg), requireFps = fpsChanged))
                 throw TuningException(IGameTuning.ERROR_INVALID, "Display apply failed")
