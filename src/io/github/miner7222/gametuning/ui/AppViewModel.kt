@@ -732,8 +732,25 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             val g = games.label(p)
             mine.add(ImportItem.Mine(p, m, preset, g, preset.name, s(R.string.import_where, g, s(modeLabelRes(m)))))
         }
-        val builtIn = repo.profileSources().map { builtInItem(it) }.sortedBy { if (it.source.profileKey == "default") "" else it.title.lowercase() }
+        val builtIn = distinctBuiltIns(repo.profileSources().distinctBy { it.profileKey }.map { builtInItem(it) })
+            .sortedBy { if (it.source.profileKey == "default") "" else it.title.lowercase() }
         return ImportSources(mine.sortedBy { it.title.lowercase() }, builtIn)
+    }
+
+    /**
+     * Entries that share a title: one of them when they are the same entry, otherwise each gets its
+     * first package after the starting-point count so they can be told apart.
+     */
+    private fun distinctBuiltIns(items: List<ImportItem.BuiltIn>): List<ImportItem.BuiltIn> {
+        fun identity(i: ImportItem.BuiltIn) =
+            i.source.packages.orEmpty().toSortedSet().toString() + i.source.baseModes.orEmpty().sorted()
+        return items.groupBy { it.title }.values.flatMap { group ->
+            val unique = group.distinctBy { identity(it) }
+            if (unique.size < 2) unique
+            else unique.map {
+                ImportItem.BuiltIn(it.source, it.title, s(R.string.import_where, it.subtitle, it.source.profileKey))
+            }
+        }
     }
 
     /** The values an import would bring, for the preview. */
@@ -771,11 +788,13 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     fun doImport(
         item: ImportItem, baseMode: Int, targetPkg: String, targetMode: Int,
         replaceInUse: Boolean, includeExpert: Boolean, nameOverride: String? = null,
+        replaceId: String? = null,
     ) = launchLocked {
         requireTuningEnabled(targetPkg)
         val lib = buildLibrary(targetPkg, targetMode, repo.tunings())
         val before = Snap(targetPkg, targetMode, lib.presets, lib.inUseId)
-        val replacing = replaceInUse && lib.inUse != null
+        val replaced = if (replaceId != null) lib.presets.firstOrNull { it.id == replaceId } else if (replaceInUse) lib.inUse else null
+        val replacing = replaced != null
         if (!replacing && lib.presets.size + 1 >= MAX_PRESETS) {
             say(s(R.string.preset_limit))
             return@launchLocked
@@ -803,8 +822,8 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
                 wanted = item.title
             }
         }
-        val p = if (replacing) {
-            Preset(lib.inUse!!.id, lib.inUse!!.name, cfg, disp)
+        val p = if (replaced != null) {
+            Preset(replaced.id, replaced.name, cfg, disp)
         } else {
             val chosen = nameOverride?.trim()?.takeIf { it.isNotEmpty() } ?: wanted
             Preset(newPresetId(), uniqueName(lib.presets, chosen.take(64)), cfg, disp)
@@ -830,6 +849,15 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         } catch (_: TuningException) {
             emptyList()
         }
+    }
+
+    /** The preset a record was made with, if it still exists; null for the built-in setting. */
+    fun recordPreset(ps: ProfileState, info: RecordingInfo): Preset? =
+        recordPresetIn(ps.libs[info.mode]?.presets.orEmpty(), info)
+
+    private fun recordPresetIn(presets: List<Preset>, info: RecordingInfo): Preset? {
+        val id = info.profile?.variantId.orEmpty()
+        return if (id.isEmpty()) null else presets.firstOrNull { it.id == id }
     }
 
     /** Records of one profile made with one preset (null id is the built-in setting). */
@@ -1065,25 +1093,27 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
 
     /**
      * Applies an automatic adjustment with the proposal's tuning unchanged, so the daemon can tell
-     * it from the proposal. Changing the preset in use keeps the previous tuning as its last stable
-     * setting.
+     * it from the proposal. Changing the record's preset keeps the previous tuning as its last stable
+     * setting; a built-in setting is never changed, only saved as a new preset.
      */
     fun applyAutoTune(info: RecordingInfo, plan: AutoPlan, asNew: Boolean, name: String) = launchLocked {
         val pkg = info.packageName
         requireTuningEnabled(pkg)
         val mode = info.mode
         val lib = buildLibrary(pkg, mode, repo.tunings())
-        val inUse = lib.inUse
+        val recorded = recordPresetIn(lib.presets, info)
+        val shown = lib.inUse?.display ?: DisplayValues.builtin(mode)
         val before = Snap(pkg, mode, lib.presets, lib.inUseId)
         val cfg = plan.proposal.tuning.deepCopy()
-        if (!asNew && inUse != null) {
-            store.setStable(pkg, mode, inUse.id, inUse.config)
-            cfg.variantId = inUse.id
-            cfg.variantName = inUse.name
+        if (!asNew && recorded != null) {
+            store.setStable(pkg, mode, recorded.id, recorded.config)
+            cfg.variantId = recorded.id
+            cfg.variantName = recorded.name
             val normalized = repo.setTuning(cfg).also { it.ensureArrays() }
-            store.upsert(pkg, mode, Preset(inUse.id, inUse.name, normalized, inUse.display))
+            store.upsert(pkg, mode, Preset(recorded.id, recorded.name, normalized, recorded.display))
+            if (recorded.display != shown) applyDisplay(pkg, mode, recorded.display, games.allowances(pkg))
             reloadLocked()
-            say(s(R.string.auto_changed, inUse.name), undoFor(before))
+            say(s(R.string.auto_changed, recorded.name), undoFor(before))
         } else {
             if (lib.presets.size + 1 >= MAX_PRESETS) {
                 say(s(R.string.preset_limit))
@@ -1094,7 +1124,9 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             cfg.variantId = id
             cfg.variantName = finalName
             val normalized = repo.setTuning(cfg).also { it.ensureArrays() }
-            store.upsert(pkg, mode, Preset(id, finalName, normalized, inUse?.display ?: DisplayValues.builtin(mode)))
+            val display = recorded?.display ?: DisplayValues.builtin(mode)
+            store.upsert(pkg, mode, Preset(id, finalName, normalized, display))
+            if (display != shown) applyDisplay(pkg, mode, display, games.allowances(pkg))
             reloadLocked()
             say(s(R.string.preset_created, finalName), undoFor(before))
         }

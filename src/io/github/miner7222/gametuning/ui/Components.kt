@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -38,7 +39,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -53,6 +56,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.ToggleButtonShapes
@@ -141,7 +146,7 @@ fun EmptyState(
 @Composable
 fun TopBar(
     title: String, subtitle: String? = null, onBack: (() -> Unit)?, modifier: Modifier = Modifier,
-    actions: @Composable RowScope.() -> Unit = {},
+    subtitleMaxLines: Int = Int.MAX_VALUE, actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
         modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp),
@@ -156,7 +161,12 @@ fun TopBar(
         }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle != null) Muted(subtitle, style = MaterialTheme.typography.bodyMedium)
+            if (subtitle != null) {
+                Text(
+                    subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = subtitleMaxLines, overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         actions()
     }
@@ -172,7 +182,8 @@ fun PageTitle(title: String, subtitle: String? = null, modifier: Modifier = Modi
 
 /**
  * Connected button group with one selected button: 2 dp apart, 24 dp outer and 6 dp inner corners,
- * and the selected button becomes a full pill.
+ * and the selected button becomes a full pill. With [wrapColumns] set, a group narrower than
+ * [wrapBelow] becomes a connected grid with that many buttons per row.
  */
 @Composable
 fun <T> ConnectedChoice(
@@ -180,40 +191,82 @@ fun <T> ConnectedChoice(
     modifier: Modifier = Modifier, height: Dp = 48.dp, enabled: Boolean = true,
     labelStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelLarge,
     optionEnabled: (T) -> Boolean = { true },
+    wrapColumns: Int = 0, wrapBelow: Dp = 480.dp,
+) {
+    if (wrapColumns <= 0 || wrapColumns >= options.size) {
+        ChoiceGrid(options, selected, onSelect, modifier, height, enabled, labelStyle, optionEnabled, options.size)
+    } else {
+        BoxWithConstraints(modifier) {
+            val columns = if (maxWidth < wrapBelow) wrapColumns else options.size
+            ChoiceGrid(options, selected, onSelect, Modifier.fillMaxWidth(), height, enabled, labelStyle, optionEnabled, columns)
+        }
+    }
+}
+
+@Composable
+private fun <T> ChoiceGrid(
+    options: List<Pair<T, String>>, selected: T?, onSelect: (T) -> Unit, modifier: Modifier,
+    height: Dp, enabled: Boolean, labelStyle: androidx.compose.ui.text.TextStyle, optionEnabled: (T) -> Boolean,
+    columns: Int,
 ) {
     val cs = MaterialTheme.colorScheme
-    Row(
-        modifier.selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        options.forEachIndexed { i, (value, label) ->
-            val outer = 24.dp
-            val inner = 6.dp
-            val first = i == 0
-            val last = i == options.lastIndex
-            val shape = RoundedCornerShape(
-                topStart = if (first) outer else inner, bottomStart = if (first) outer else inner,
-                topEnd = if (last) outer else inner, bottomEnd = if (last) outer else inner,
-            )
-            val shapes = ToggleButtonShapes(shape = shape, pressedShape = shape, checkedShape = CircleShape)
-            ToggleButton(
-                checked = value == selected,
-                onCheckedChange = { onSelect(value) },
-                enabled = enabled && optionEnabled(value),
-                modifier = Modifier.weight(1f).height(height).semantics { role = Role.RadioButton },
-                shapes = shapes,
-                colors = ToggleButtonDefaults.toggleButtonColors(
-                    containerColor = cs.surfaceContainerHigh,
-                    contentColor = cs.onSurface,
-                    checkedContainerColor = cs.primary,
-                    checkedContentColor = cs.onPrimary,
-                ),
-                contentPadding = PaddingValues(horizontal = 2.dp),
-            ) {
-                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = labelStyle)
+    val outer = 24.dp
+    val inner = 6.dp
+    val rows = options.chunked(columns.coerceAtLeast(1))
+    Column(modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        rows.forEachIndexed { r, row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                row.forEachIndexed { c, (value, label) ->
+                    val top = r == 0
+                    val bottom = r == rows.lastIndex
+                    val left = c == 0
+                    val right = c == row.lastIndex
+                    val shape = RoundedCornerShape(
+                        topStart = if (top && left) outer else inner, bottomStart = if (bottom && left) outer else inner,
+                        topEnd = if (top && right) outer else inner, bottomEnd = if (bottom && right) outer else inner,
+                    )
+                    val shapes = ToggleButtonShapes(shape = shape, pressedShape = shape, checkedShape = CircleShape)
+                    ToggleButton(
+                        checked = value == selected,
+                        onCheckedChange = { onSelect(value) },
+                        enabled = enabled && optionEnabled(value),
+                        modifier = Modifier.weight(1f).height(height).semantics { role = Role.RadioButton },
+                        shapes = shapes,
+                        colors = ToggleButtonDefaults.toggleButtonColors(
+                            containerColor = cs.surfaceContainerHigh,
+                            contentColor = cs.onSurface,
+                            checkedContainerColor = cs.primary,
+                            checkedContentColor = cs.onPrimary,
+                        ),
+                        contentPadding = PaddingValues(horizontal = 2.dp),
+                    ) {
+                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = labelStyle)
+                    }
+                }
             }
         }
     }
+}
+
+/** The search box of the game list and the import list, with a clear button while it holds text. */
+@Composable
+fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    TextField(
+        value = query, onValueChange = onQuery, singleLine = true, modifier = modifier.fillMaxWidth(),
+        placeholder = { Text(stringResource(R.string.search_games)) },
+        leadingIcon = { Icon(Icons.Rounded.Search, null) },
+        trailingIcon = if (query.isNotEmpty()) ({
+            IconButton(onClick = { onQuery("") }, Modifier.size(48.dp)) {
+                Icon(Icons.Rounded.Close, stringResource(R.string.clear_search))
+            }
+        }) else null,
+        shape = RoundedCornerShape(28.dp),
+        colors = TextFieldDefaults.colors(
+            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+            focusedContainerColor = cs.surfaceContainerHigh, unfocusedContainerColor = cs.surfaceContainerHigh,
+        ),
+    )
 }
 
 /** A row with a title, a description and a trailing switch. */

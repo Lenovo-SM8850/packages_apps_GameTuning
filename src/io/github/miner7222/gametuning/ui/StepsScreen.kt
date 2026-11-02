@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -42,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -206,9 +208,10 @@ fun StepsScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boolea
             }
         } else {
             TopBar(stringResource(R.string.steps_title), st.label, leave)
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            val scroll = rememberScrollState()
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 Column(
-                    Modifier.widthIn(max = 720.dp).verticalScroll(rememberScrollState()).padding(16.dp),
+                    Modifier.widthIn(max = 720.dp).verticalScroll(scroll).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Muted(stringResource(R.string.steps_intro), Modifier.padding(horizontal = 8.dp), MaterialTheme.typography.bodyMedium)
@@ -221,9 +224,21 @@ fun StepsScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boolea
                     }
                     if (steps.size < 4 && steps.isNotEmpty()) addStep()
                     if (!increasing) Text(stringResource(R.string.steps_invalid), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = useBase, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.steps_use_base)) }
-                        Button(onClick = save, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
+                }
+            }
+            // Pinned actions; the system bars are already kept clear by the root layout. The divider shows
+            // while steps continue behind the bar.
+            Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer) {
+                Column {
+                    HorizontalDivider(color = if (scroll.canScrollForward) MaterialTheme.colorScheme.outlineVariant else Color.Transparent)
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                        Row(
+                            Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                        ) {
+                            TextButton(onClick = useBase, Modifier.weight(1f, fill = false).heightIn(min = 48.dp)) { Text(stringResource(R.string.steps_use_base)) }
+                            Button(onClick = save, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save)) }
+                        }
                     }
                 }
             }

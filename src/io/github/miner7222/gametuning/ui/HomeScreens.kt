@@ -43,7 +43,6 @@ import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Tune
@@ -60,8 +59,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,7 +75,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -159,18 +155,7 @@ fun GameListPane(
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-                TextField(
-                    value = query, onValueChange = onQuery, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(stringResource(R.string.search_games)) },
-                    leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                    shape = RoundedCornerShape(28.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    ),
-                )
+                SearchField(query, onQuery)
                 Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val labels = listOf(R.string.filter_all, R.string.filter_adjusted, R.string.filter_recording)
                     labels.forEachIndexed { i, r ->
@@ -195,7 +180,9 @@ fun GameListPane(
                         Muted(stringResource(R.string.no_matches), Modifier.padding(20.dp), MaterialTheme.typography.bodyMedium)
                     }
                 } else {
-                    Muted(stringResource(R.string.no_matches), Modifier.padding(16.dp), MaterialTheme.typography.bodyMedium)
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        EmptyState(Icons.Rounded.SearchOff, stringResource(R.string.no_matches), Modifier.fillMaxWidth())
+                    }
                 }
             }
         }
@@ -302,13 +289,8 @@ fun ProfilePane(
     @Composable
     fun modeCards() {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            // Icon and label need a card at least as wide as the longest bold label; otherwise only icons show.
-            val measurer = rememberTextMeasurer()
-            val density = androidx.compose.ui.platform.LocalDensity.current
-            val labelStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-            val needed = Modes.ALL.maxOf { with(density) { measurer.measure(ctx.modeName(it), labelStyle, maxLines = 1).size.width.toDp() } } +
-                MODE_ICON_SIZE + MODE_ICON_GAP
-            val iconOnly = (maxWidth - 16.dp) / 3 - 16.dp < needed
+            // Icons alone only on a screen under 340 dp wide (this row sits inside two 16 dp gutters) or with large text.
+            val iconOnly = maxWidth + 32.dp < 340.dp || androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.3f
             Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (m in Modes.ALL) {
                     val on = m == ps.mode

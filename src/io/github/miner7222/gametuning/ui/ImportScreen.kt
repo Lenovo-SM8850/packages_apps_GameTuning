@@ -22,12 +22,12 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
@@ -35,8 +35,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -89,15 +87,7 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
 
         @Composable
         fun search() {
-            TextField(
-                value = query, onValueChange = { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(stringResource(R.string.search_games)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                shape = RoundedCornerShape(28.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ),
-            )
+            SearchField(query, { query = it })
         }
 
         @Composable
@@ -130,7 +120,7 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         @Composable
         fun mineList() {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (mine.isEmpty()) Muted(stringResource(R.string.no_presets_elsewhere), Modifier.padding(16.dp), MaterialTheme.typography.bodyMedium)
+                if (mine.isEmpty()) EmptyState(Icons.Rounded.Download, stringResource(R.string.no_presets_elsewhere), Modifier.fillMaxWidth())
                 mine.forEachIndexed { i, it -> itemRow(it, i, mine.size, it.gameLabel.take(1).uppercase(), it.key == selected?.key) }
             }
         }
@@ -138,6 +128,7 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         @Composable
         fun builtList() {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (built.isEmpty() && query.isNotBlank()) EmptyState(Icons.Rounded.SearchOff, stringResource(R.string.no_matches), Modifier.fillMaxWidth())
                 built.forEachIndexed { i, it -> itemRow(it, i, built.size, it.title.take(1).uppercase(), it.key == selected?.key) }
             }
         }

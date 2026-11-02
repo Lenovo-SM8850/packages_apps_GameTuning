@@ -181,9 +181,7 @@ fun RecordsScreen(vm: AppViewModel, nav: Nav, pkg: String, wide: Boolean, openId
 
     @Composable
     fun list() {
-        if (all.isEmpty()) {
-            Muted(stringResource(R.string.rec_empty), Modifier.padding(16.dp), MaterialTheme.typography.bodyMedium)
-        }
+        if (all.isEmpty()) EmptyState(Icons.Rounded.BarChart, stringResource(R.string.rec_empty), Modifier.fillMaxWidth())
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             shown.forEachIndexed { i, r ->
                 RecordCard(

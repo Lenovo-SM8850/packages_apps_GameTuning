@@ -158,11 +158,11 @@ fun TuningScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                 }
             }
         } else {
-            TopBar(stringResource(R.string.tuning_details), null, { nav.pop() }, actions = { overflow() })
+            // Game, profile and preset stay in the top bar while the sections scroll.
+            TopBar(stringResource(R.string.tuning_details), subtitle, { nav.pop() }, subtitleMaxLines = 1, actions = { overflow() })
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Column(Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                        Muted(subtitle, style = MaterialTheme.typography.bodyMedium)
                         Muted(startsFrom)
                     }
                     TonalCard(Modifier.padding(top = 12.dp).fillMaxWidth()) {
@@ -395,7 +395,7 @@ private fun HeatContent(vm: AppViewModel, st: TuningState, vertical: Boolean) {
             }
         }
     } else {
-        ConnectedChoice(options, st.effective.thermalCase, select, height = 56.dp)
+        ConnectedChoice(options, st.effective.thermalCase, select, height = 56.dp, wrapColumns = 2)
     }
 }
 
@@ -518,7 +518,7 @@ private fun DisplayContent(vm: AppViewModel, st: TuningState) {
         ConnectedChoice(
             FPS_LIMITS.map { it to ctx.fpsName(it) }, d0.fpsLimit,
             { v -> vm.edit(ctx.getString(R.string.saved_fps, ctx.fpsName(v))) { _, d, _ -> d.copy(fpsLimit = v) } },
-            enabled = st.allow.fpsOverride,
+            enabled = st.allow.fpsOverride, wrapColumns = 4,
         )
         Muted(stringResource(if (st.allow.fpsOverride) R.string.fps_desc else R.string.fps_blocked))
     }

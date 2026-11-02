@@ -78,6 +78,7 @@ import io.github.miner7222.gametuning.data.formatPower
 import io.github.miner7222.gametuning.data.builtinName
 import io.github.miner7222.gametuning.data.heatName
 import io.github.miner7222.gametuning.data.modeName
+import io.github.miner7222.gametuning.data.resourceName
 import vendor.lenovo.hardware.gametuning.RecordingInfo
 
 private const val BUILTIN = ""
@@ -205,6 +206,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                                                 if (on) InUseTag(mode == ps.mode)
                                             }
                                             Muted(presetDiff(ps, vm, mode, p), style = MaterialTheme.typography.bodyMedium)
+                                            if (p == null) builtinLine(ps, mode)?.let { Muted(it) }
                                             Muted(lastRecordText(vm, ps, mode, p?.id))
                                         }
                                     }
@@ -482,6 +484,15 @@ private fun PresetDetail(
             }
         }
     }
+}
+
+/** What the profile itself gives the game, on one line: CPU, Prime core, GPU and heat limit. */
+@Composable
+private fun builtinLine(ps: ProfileState, mode: Int): String? {
+    val ctx = LocalContext.current
+    val b = ps.builtins[mode] ?: return null
+    val speeds = listOf(Resource.GOLD, Resource.PRIME, Resource.GPU).map { ctx.resourceName(it) + " " + speedText(ps.limits, b, it) }
+    return (speeds + (stringResource(R.string.heat_limit) + " " + ctx.heatName(b.thermalCase))).joinToString(" · ")
 }
 
 /** What the profile itself gives the game, in two rows of two. */

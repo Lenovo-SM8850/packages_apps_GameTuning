@@ -282,13 +282,15 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             Text(stringResource(R.string.expert_warning), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                    ConnectedChoice(secs.map { it.first to it.second }, section, { sec = it.name },
-                        optionEnabled = { it != ExpertSec.SCENES || st.scenesSupported })
-                    if (!st.scenesSupported) {
-                        Muted(stringResource(R.string.scene_support_note), Modifier.padding(horizontal = 8.dp), MaterialTheme.typography.bodyMedium)
-                    }
-                    when (section) {
-                        ExpertSec.SCENES -> {
+                    // The scene tab stays selectable: the notice shows only inside it, never on the other tabs.
+                    val tab = ExpertSec.valueOf(sec)
+                    ConnectedChoice(secs.map { it.first to it.second }, tab, { sec = it.name })
+                    when (tab) {
+                        ExpertSec.SCENES -> if (!st.scenesSupported) {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                EmptyState(Icons.Rounded.Layers, stringResource(R.string.scene_support_note), Modifier.fillMaxWidth())
+                            }
+                        } else {
                             SceneHeader(vm, st, seen)
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 scenes.forEachIndexed { i, r ->

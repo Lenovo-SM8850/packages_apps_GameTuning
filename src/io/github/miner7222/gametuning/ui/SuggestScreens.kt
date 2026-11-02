@@ -7,6 +7,7 @@ import android.content.Context
 import android.text.format.DateUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -60,6 +61,7 @@ import io.github.miner7222.gametuning.data.joinNames
 import io.github.miner7222.gametuning.data.ladder
 import io.github.miner7222.gametuning.data.modeName
 import io.github.miner7222.gametuning.data.presetLabel
+import io.github.miner7222.gametuning.data.presetName
 import io.github.miner7222.gametuning.data.resourceName
 import vendor.lenovo.hardware.gametuning.IGameTuning
 import vendor.lenovo.hardware.gametuning.PolicyLimits
@@ -243,11 +245,11 @@ fun SuggestScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Boo
             value = null
             value = vm.suggestionsFor(info, goal)
         }
-        val inUse = ps.libs[info.mode]?.inUse
+        val recorded = vm.recordPreset(ps, info)
         val saw = sawLines(ctx, vm.tf, ps.limits, info)
 
         fun apply(sg: Suggestion, replace: Boolean, name: String) {
-            vm.doImport(sg.item, sg.baseMode, info.packageName, info.mode, replace && inUse != null, sg.includeExpert, name)
+            vm.doImport(sg.item, sg.baseMode, info.packageName, info.mode, false, sg.includeExpert, name, replaceId = if (replace) recorded?.id else null)
             nav.pop()
         }
 
@@ -261,7 +263,7 @@ fun SuggestScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Boo
                         Muted(stringResource(R.string.suggest_none), Modifier.padding(16.dp), MaterialTheme.typography.bodyLarge)
                     } else {
                         val top = r.value.first()
-                        TopSuggestion(top, inUse?.name, wide, onSaveNew = { saving = 0 }, onReplace = { apply(top, true, top.name) })
+                        TopSuggestion(top, recorded?.name, wide, onSaveNew = { saving = 0 }, onReplace = { apply(top, true, top.name) })
                         val rest = r.value.drop(1)
                         if (wide) {
                             rest.chunked(2).forEachIndexed { rowIndex, row ->
@@ -330,7 +332,7 @@ private fun ChangeChips(changes: List<String>, container: androidx.compose.ui.gr
 }
 
 @Composable
-private fun TopSuggestion(sg: Suggestion, inUseName: String?, wide: Boolean, onSaveNew: () -> Unit, onReplace: () -> Unit) {
+private fun TopSuggestion(sg: Suggestion, replaceName: String?, wide: Boolean, onSaveNew: () -> Unit, onReplace: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val kind = stringResource(if (sg.yours) R.string.kind_yours else R.string.kind_builtin)
     Surface(shape = RoundedCornerShape(if (wide) 32.dp else 32.dp), color = cs.primaryContainer, contentColor = cs.onPrimaryContainer, modifier = Modifier.fillMaxWidth()) {
@@ -344,9 +346,9 @@ private fun TopSuggestion(sg: Suggestion, inUseName: String?, wide: Boolean, onS
         }
         val buttons: @Composable () -> Unit = {
             Button(onClick = onSaveNew, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save_as_new_preset)) }
-            if (inUseName != null) {
+            if (replaceName != null) {
                 OutlinedButton(onClick = onReplace, Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.replace_preset_named, inUseName), maxLines = 1)
+                    Text(stringResource(R.string.replace_preset_named, replaceName), maxLines = 1)
                 }
             }
         }
@@ -384,9 +386,19 @@ private fun OtherSuggestion(sg: Suggestion, rank: Int, wide: Boolean, onSave: ()
                 OutlinedButton(onClick = onSave, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save_as_preset)) }
             }
         } else {
-            Row(Modifier.heightIn(min = 104.dp).padding(start = 24.dp, end = 16.dp, top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                text(Modifier.weight(1f))
-                OutlinedButton(onClick = onSave, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save_as_preset), maxLines = 1) }
+            BoxWithConstraints {
+                // Start 24 and end 16 dp of padding; under 480 dp inside, the button goes below the text.
+                if (maxWidth - 40.dp < 480.dp) {
+                    Column(Modifier.padding(start = 24.dp, end = 16.dp, top = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        text(Modifier.fillMaxWidth())
+                        OutlinedButton(onClick = onSave, Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text(stringResource(R.string.save_as_preset), maxLines = 1) }
+                    }
+                } else {
+                    Row(Modifier.heightIn(min = 104.dp).padding(start = 24.dp, end = 16.dp, top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        text(Modifier.weight(1f))
+                        OutlinedButton(onClick = onSave, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.save_as_preset), maxLines = 1) }
+                    }
+                }
             }
         }
     }
@@ -414,9 +426,12 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
         var goal by rememberSaveable { mutableStateOf(IGameTuning.GOAL_BALANCED) }
         var attempt by rememberSaveable { mutableStateOf(0) }
         var asNew by rememberSaveable { mutableStateOf(false) }
-        val inUse = ps.libs[info.mode]?.inUse
-        val builtinName = stringResource(R.string.builtin_setting)
-        val baseName = inUse?.name ?: builtinName
+        // The preset the record was made with; a built-in setting is never changed, only saved as a new preset.
+        val recorded = vm.recordPreset(ps, info)
+        val seedName = info.presetName().ifEmpty {
+            stringResource(if (info.profile?.tuned == true) R.string.unnamed_preset else R.string.builtin_setting)
+        }
+        val baseName = recorded?.name ?: seedName
         val goalWord = stringResource(
             when (goal) {
                 IGameTuning.GOAL_FRAMES -> R.string.goal_word_frames
@@ -425,14 +440,14 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
             },
         )
         val defaultName = stringResource(R.string.auto_new_name, baseName, goalWord)
-        var name by rememberSaveable(goal, inUse?.id) { mutableStateOf(defaultName) }
+        var name by rememberSaveable(goal, recorded?.id) { mutableStateOf(defaultName) }
         val result by produceState<Outcome<AutoPlan>?>(null, info.id, goal, attempt) {
             value = null
             value = vm.autoPlanFor(info, goal)
         }
         val saw = sawLines(ctx, vm.tf, ps.limits, info)
         val plan = (result as? Outcome.Ok<AutoPlan>)?.value
-        val canChange = inUse != null
+        val canChange = recorded != null
         val creatingNew = asNew || !canChange
 
         @Composable
@@ -445,7 +460,10 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
                     val p = r.value
                     Surface(shape = RoundedCornerShape(28.dp), color = cs.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(horizontal = if (wide) 28.dp else 24.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text(stringResource(R.string.auto_change_to, baseName), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (canChange) stringResource(R.string.auto_change_to, baseName) else stringResource(R.string.what_it_changes),
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                            )
                             if (p.lines.isEmpty()) {
                                 Text(stringResource(R.string.auto_fits), style = MaterialTheme.typography.bodyLarge)
                             } else {
@@ -466,24 +484,23 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
         fun whereToApply() {
             val cs = MaterialTheme.colorScheme
             Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(if (wide) 12.dp else 0.dp)) {
-                val rows = listOf(
-                    false to stringResource(R.string.auto_where_change, baseName),
+                val rows = listOfNotNull(
+                    if (canChange) false to stringResource(R.string.auto_where_change, baseName) else null,
                     true to stringResource(R.string.save_as_new_preset_long),
                 )
                 Surface(shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                     if (wide) {
                         Row(Modifier.fillMaxWidth().padding(0.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             rows.forEach { (isNew, text) ->
-                                val enabled = isNew || canChange
                                 val on = creatingNew == isNew
                                 val optionShape = RoundedCornerShape(20.dp)
                                 Surface(
                                     shape = optionShape, color = if (on) cs.primaryContainer else cs.surfaceContainer,
                                     contentColor = if (on) cs.onPrimaryContainer else cs.onSurface, modifier = Modifier.weight(1f)
-                                        .clip(optionShape).selectable(on, enabled = enabled, role = Role.RadioButton) { asNew = isNew },
+                                        .clip(optionShape).selectable(on, role = Role.RadioButton) { asNew = isNew },
                                 ) {
                                     Row(Modifier.heightIn(min = 56.dp).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        RadioButton(selected = on, onClick = null, enabled = enabled)
+                                        RadioButton(selected = on, onClick = null)
                                         Text(text, style = MaterialTheme.typography.bodyLarge)
                                     }
                                 }
@@ -492,14 +509,13 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
                     } else {
                         Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
                             rows.forEach { (isNew, text) ->
-                                val enabled = isNew || canChange
                                 val on = creatingNew == isNew
                                 Row(
-                                    Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(on, enabled = enabled, role = Role.RadioButton) { asNew = isNew },
+                                    Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(on, role = Role.RadioButton) { asNew = isNew },
                                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
                                 ) {
-                                    RadioButton(selected = on, onClick = null, enabled = enabled)
-                                    Text(text, style = MaterialTheme.typography.bodyLarge, color = if (enabled) androidx.compose.ui.graphics.Color.Unspecified else cs.onSurfaceVariant)
+                                    RadioButton(selected = on, onClick = null)
+                                    Text(text, style = MaterialTheme.typography.bodyLarge)
                                 }
                             }
                         }
