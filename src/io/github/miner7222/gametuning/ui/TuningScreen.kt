@@ -46,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -243,11 +244,12 @@ private fun SecPane(title: Int, subtitle: Int? = null, gap: Dp = 20.dp, content:
 @Composable
 private fun SectionButton(title: String, summary: String, current: Boolean, shape: androidx.compose.ui.graphics.Shape, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val buttonShape = if (current) RoundedCornerShape(28.dp) else shape
     Surface(
-        shape = if (current) RoundedCornerShape(28.dp) else shape,
+        shape = buttonShape,
         color = if (current) cs.primaryContainer else cs.surfaceContainer,
         contentColor = if (current) cs.onPrimaryContainer else cs.onSurface,
-        modifier = Modifier.fillMaxWidth().selectable(current, role = Role.Button, onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clip(buttonShape).selectable(current, role = Role.Button, onClick = onClick),
     ) {
         Column(Modifier.heightIn(min = 72.dp).padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.Center) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
@@ -383,11 +385,12 @@ private fun HeatContent(vm: AppViewModel, st: TuningState, vertical: Boolean) {
         Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             options.forEachIndexed { i, (v, label) ->
                 val on = v == st.effective.thermalCase
+                val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, n, 24.dp)
                 Surface(
-                    shape = if (on) RoundedCornerShape(28.dp) else groupShape(i, n, 24.dp),
+                    shape = itemShape,
                     color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.fillMaxWidth().selectable(on, role = Role.RadioButton) { select(v) },
+                    modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, role = Role.RadioButton) { select(v) },
                 ) { Text(label, Modifier.heightIn(min = 56.dp).padding(horizontal = 20.dp).wrapCenter(), style = MaterialTheme.typography.labelLarge, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium) }
             }
         }

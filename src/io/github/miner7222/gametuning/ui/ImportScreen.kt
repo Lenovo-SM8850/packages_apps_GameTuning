@@ -47,6 +47,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -101,11 +102,12 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
 
         @Composable
         fun itemRow(item: ImportItem, i: Int, n: Int, initial: String, isSel: Boolean) {
+            val itemShape = if (isSel && wide) RoundedCornerShape(24.dp) else groupShape(i, n, 24.dp)
             Surface(
-                shape = if (isSel && wide) RoundedCornerShape(24.dp) else groupShape(i, n, 24.dp),
+                shape = itemShape,
                 color = if (isSel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
                 contentColor = if (isSel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth().selectable(isSel, role = Role.Button) { selKey = item.key },
+                modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(isSel, role = Role.Button) { selKey = item.key },
             ) {
                 Row(Modifier.heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     if (!wide) {

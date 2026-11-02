@@ -41,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -180,11 +181,12 @@ fun StepsScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boolea
                 Column(Modifier.width(280.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     steps.forEachIndexed { i, s ->
                         val on = i == sel
+                        val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, steps.size, 24.dp)
                         Surface(
-                            shape = if (on) RoundedCornerShape(28.dp) else groupShape(i, steps.size, 24.dp),
+                            shape = itemShape,
                             color = if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
                             contentColor = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth().selectable(on, role = Role.Button) { selected = i },
+                            modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, role = Role.Button) { selected = i },
                         ) {
                             Column(Modifier.heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
                                 Text(stepTitle(i, s), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)

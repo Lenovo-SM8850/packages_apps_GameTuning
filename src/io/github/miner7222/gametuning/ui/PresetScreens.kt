@@ -59,6 +59,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -68,7 +69,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.Change
-import io.github.miner7222.gametuning.data.DisplayValues
 import io.github.miner7222.gametuning.data.MAX_PRESETS
 import io.github.miner7222.gametuning.data.Modes
 import io.github.miner7222.gametuning.data.Preset
@@ -149,11 +149,12 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                 Column(Modifier.width(380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     entries.forEachIndexed { i, p ->
                         val on = (p?.id ?: BUILTIN) == selId
+                        val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, count, 24.dp)
                         Surface(
-                            shape = if (on) RoundedCornerShape(28.dp) else groupShape(i, count, 24.dp),
+                            shape = itemShape,
                             color = if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
                             contentColor = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth().selectable(selected = on, role = Role.Button) { open(p) },
+                            modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(selected = on, role = Role.Button) { open(p) },
                         ) {
                             Row(Modifier.heightIn(min = 80.dp).padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -488,13 +489,11 @@ private fun PresetDetail(
 private fun BuiltinValues(ps: ProfileState, mode: Int) {
     val ctx = LocalContext.current
     val b = ps.builtins[mode] ?: return
-    val fps = DisplayValues.builtin(mode).fpsLimit
-    val heat = ctx.heatName(b.thermalCase) + " · " + if (fps > 0) stringResource(R.string.fps_value, fps) else stringResource(R.string.no_limit)
     val cells = listOf(
         stringResource(R.string.res_cpu) to speedText(ps.limits, b, Resource.GOLD),
         stringResource(R.string.res_fastest) to speedText(ps.limits, b, Resource.PRIME),
         stringResource(R.string.res_graphics) to speedText(ps.limits, b, Resource.GPU),
-        stringResource(R.string.heat_frame_short) to heat,
+        stringResource(R.string.heat_limit) to ctx.heatName(b.thermalCase),
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         cells.chunked(2).forEach { pair ->

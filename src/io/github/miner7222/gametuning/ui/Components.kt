@@ -179,6 +179,7 @@ fun <T> ConnectedChoice(
     options: List<Pair<T, String>>, selected: T?, onSelect: (T) -> Unit,
     modifier: Modifier = Modifier, height: Dp = 48.dp, enabled: Boolean = true,
     labelStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelLarge,
+    optionEnabled: (T) -> Boolean = { true },
 ) {
     val cs = MaterialTheme.colorScheme
     Row(
@@ -198,7 +199,7 @@ fun <T> ConnectedChoice(
             ToggleButton(
                 checked = value == selected,
                 onCheckedChange = { onSelect(value) },
-                enabled = enabled,
+                enabled = enabled && optionEnabled(value),
                 modifier = Modifier.weight(1f).height(height).semantics { role = Role.RadioButton },
                 shapes = shapes,
                 colors = ToggleButtonDefaults.toggleButtonColors(

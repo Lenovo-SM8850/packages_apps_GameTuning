@@ -48,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -107,11 +108,12 @@ private fun GoalPicker(goal: Int, onPick: (Int) -> Unit, wide: Boolean) {
         Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             GOALS.forEachIndexed { i, g ->
                 val on = g == goal
+                val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, GOALS.size, 20.dp, 6.dp)
                 Surface(
-                    shape = if (on) RoundedCornerShape(28.dp) else groupShape(i, GOALS.size, 20.dp, 6.dp),
+                    shape = itemShape,
                     color = if (on) cs.primary else cs.surfaceContainer,
                     contentColor = if (on) cs.onPrimary else cs.onSurface,
-                    modifier = Modifier.fillMaxWidth().selectable(on, role = Role.RadioButton) { onPick(g) },
+                    modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, role = Role.RadioButton) { onPick(g) },
                 ) {
                     Column(Modifier.heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
                         Text(goalLabel(g), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -474,10 +476,11 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
                             rows.forEach { (isNew, text) ->
                                 val enabled = isNew || canChange
                                 val on = creatingNew == isNew
+                                val optionShape = RoundedCornerShape(20.dp)
                                 Surface(
-                                    shape = RoundedCornerShape(20.dp), color = if (on) cs.primaryContainer else cs.surfaceContainer,
+                                    shape = optionShape, color = if (on) cs.primaryContainer else cs.surfaceContainer,
                                     contentColor = if (on) cs.onPrimaryContainer else cs.onSurface, modifier = Modifier.weight(1f)
-                                        .selectable(on, enabled = enabled, role = Role.RadioButton) { asNew = isNew },
+                                        .clip(optionShape).selectable(on, enabled = enabled, role = Role.RadioButton) { asNew = isNew },
                                 ) {
                                     Row(Modifier.heightIn(min = 56.dp).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                         RadioButton(selected = on, onClick = null, enabled = enabled)

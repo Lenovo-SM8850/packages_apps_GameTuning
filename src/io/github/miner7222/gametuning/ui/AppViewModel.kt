@@ -110,6 +110,7 @@ class TuningState(
     val changes: List<Change>,
     val hasStable: Boolean,
     val globalsLowBattery: Int,
+    val scenesSupported: Boolean,
 ) {
     val preset: Preset? get() = library.inUse
     val dedicated: Boolean get() = builtin.profileKey != GENERIC_PROFILE
@@ -349,12 +350,19 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val builtins = if (enabled) Modes.ALL.associateWith { repo.profile(pkg, it, false) } else emptyMap()
         val limits = repo.limits()
         val recs = repo.recordings(pkg)
+        scenesSupported(pkg, recs)
         val armed = enabled && pkg in repo.armedPackages()
         val effective = if (enabled) repo.profile(pkg, mode, true) else null
         val notice = if (enabled) recs.firstOrNull { it.mode == mode }?.let { computeNotice(it, limits) }
             else s(R.string.tuning_off_none)
         if (profilePkg == pkg) profile = ProfileState(pkg, label, mode, libs, builtins, effective, limits, recs, armed, notice, pkg in repo.dedicatedPackages())
     }
+
+    private fun scenesSupported(pkg: String, recordings: List<RecordingInfo>): Boolean =
+        prefs.scenesSupported(pkg, recordings.any { record ->
+            record.userId == userId && record.packageName == pkg &&
+                record.summary?.scenesSeen?.any { it in 0..100000 } == true
+        })
 
     private suspend fun loadTuningLocked(pkg: String, mode: Int) {
         if (mode !in Modes.ALL || games.isNoneMode(pkg, userId)) {
@@ -388,6 +396,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val st = TuningState(
             pkg, mode, games.label(pkg), lib, cfg, display, limits, builtin, base, effective, allow,
             changes, preset != null && store.stableConfig(pkg, mode, preset.id) != null, lowBatteryPct,
+            scenesSupported(pkg, repo.recordings(pkg)),
         )
         if (tuningKey == pkg to mode) tuning = st
     }

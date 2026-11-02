@@ -88,7 +88,7 @@ private const val MAX_SCENES = 32
 private const val MAX_RULES = 16
 private const val MAX_RT_RULES = 8
 
-private enum class ExpertSec { SCENES, THREADS, BOOST }
+private enum class ExpertSec { THREADS, BOOST, SCENES }
 
 private fun sceneRows(st: TuningState): List<SceneRow> =
     (if (st.config.scenes.isNotEmpty()) st.config.scenes else st.effective.scenes ?: emptyArray()).toList()
@@ -124,7 +124,7 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         return
     }
     val ctx = LocalContext.current
-    var sec by rememberSaveable { mutableStateOf(ExpertSec.SCENES.name) }
+    var sec by rememberSaveable { mutableStateOf(ExpertSec.THREADS.name) }
     var selScene by rememberSaveable { mutableStateOf(-1) }
     var selRule by rememberSaveable { mutableStateOf(0) }
     var sceneSheet by rememberSaveable { mutableStateOf(false) }
@@ -135,11 +135,12 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
     val current = scenes.firstOrNull { it.sceneId == selScene } ?: scenes.firstOrNull()
     val presetName = st.preset?.name ?: ctx.builtinName(st.dedicated)
     val subtitle = stringResource(R.string.tuning_sub, st.label, stringResource(AppViewModel.modeLabelRes(mode)), presetName)
-    val section = ExpertSec.valueOf(sec)
+    val section = ExpertSec.valueOf(sec).takeUnless { it == ExpertSec.SCENES && !st.scenesSupported }
+        ?: ExpertSec.THREADS
     val secs = listOf(
-        ExpertSec.SCENES to stringResource(R.string.scene_rows_n, scenes.size),
         ExpertSec.THREADS to stringResource(R.string.thread_rules_n, rules.size),
         ExpertSec.BOOST to stringResource(R.string.boost_behavior),
+        ExpertSec.SCENES to stringResource(R.string.scene_rows_n, scenes.size),
     )
     val reset: @Composable () -> Unit = {
         TextButton(onClick = {
@@ -160,15 +161,19 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                 Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     secs.forEachIndexed { i, (s, title) ->
                         val on = s == section
+                        val enabled = s != ExpertSec.SCENES || st.scenesSupported
+                        val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, secs.size, 24.dp)
                         Surface(
-                            shape = if (on) RoundedCornerShape(28.dp) else groupShape(i, secs.size, 24.dp),
+                            shape = itemShape,
                             color = if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                            contentColor = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth().selectable(on, role = Role.Button) { sec = s.name },
+                            contentColor = if (!enabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                else if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, enabled = enabled, role = Role.Button) { sec = s.name },
                         ) {
                             Column(Modifier.heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
                                 Text(title.substringBefore(" · "), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-                                Text(expertSummary(vm, st, s, scenes.size, rules.size), style = MaterialTheme.typography.bodySmall)
+                                Text(if (enabled) expertSummary(vm, st, s, scenes.size, rules.size)
+                                    else stringResource(R.string.scene_support_note), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -193,11 +198,12 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 scenes.forEachIndexed { i, r ->
                                     val on = r.sceneId == current?.sceneId
+                                    val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, scenes.size, 24.dp)
                                     Surface(
-                                        shape = if (on) RoundedCornerShape(28.dp) else groupShape(i, scenes.size, 24.dp),
+                                        shape = itemShape,
                                         color = if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
                                         contentColor = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.fillMaxWidth().selectable(on, role = Role.Button) { selScene = r.sceneId },
+                                        modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, role = Role.Button) { selScene = r.sceneId },
                                     ) {
                                         Row(Modifier.heightIn(min = 68.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                             SceneBadge(r.sceneId, 44)
@@ -234,11 +240,12 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 rules.forEachIndexed { i, ru ->
                                     val on = i == sel
+                                    val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, rules.size, 24.dp)
                                     Surface(
-                                        shape = if (on) RoundedCornerShape(28.dp) else groupShape(i, rules.size, 24.dp),
+                                        shape = itemShape,
                                         color = if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
                                         contentColor = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.fillMaxWidth().selectable(on, role = Role.Button) { selRule = i },
+                                        modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, role = Role.Button) { selRule = i },
                                     ) {
                                         Column(Modifier.heightIn(min = 72.dp).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
                                             Text(ru.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
@@ -275,7 +282,11 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             Text(stringResource(R.string.expert_warning), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                    ConnectedChoice(secs.map { it.first to it.second }, section, { sec = it.name })
+                    ConnectedChoice(secs.map { it.first to it.second }, section, { sec = it.name },
+                        optionEnabled = { it != ExpertSec.SCENES || st.scenesSupported })
+                    if (!st.scenesSupported) {
+                        Muted(stringResource(R.string.scene_support_note), Modifier.padding(horizontal = 8.dp), MaterialTheme.typography.bodyMedium)
+                    }
                     when (section) {
                         ExpertSec.SCENES -> {
                             SceneHeader(vm, st, seen)
@@ -324,14 +335,14 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         }
     }
 
-    if (!wide && sceneSheet && current != null) {
+    if (st.scenesSupported && !wide && sceneSheet && current != null) {
         ModalBottomSheet(onDismissRequest = { sceneSheet = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
                 SceneEditor(vm, st, current, false) { sceneSheet = false }
             }
         }
     }
-    if (addScene) AddSceneDialog(vm, st, scenes, onDismiss = { addScene = false }) { selScene = it }
+    if (st.scenesSupported && addScene) AddSceneDialog(vm, st, scenes, onDismiss = { addScene = false }) { selScene = it }
     if (addRule) AddRuleDialog(vm, st, rules, onDismiss = { addRule = false }) { selRule = it }
 }
 
@@ -368,6 +379,7 @@ private fun SceneHeader(vm: AppViewModel, st: TuningState, seen: IntArray?, warn
             )
         }
     }
+    Muted(stringResource(R.string.scene_support_note), Modifier.padding(horizontal = 8.dp, vertical = 4.dp), MaterialTheme.typography.bodyMedium)
     if (seen != null && seen.isNotEmpty()) {
         Muted(stringResource(R.string.scenes_seen, seen.take(8).joinToString(" · ")), Modifier.padding(horizontal = 8.dp, vertical = 4.dp), MaterialTheme.typography.bodyMedium)
     }
@@ -664,11 +676,12 @@ private fun CoreToggle(core: Int, on: Boolean, fast: Boolean, modifier: Modifier
     val container = if (!on) androidx.compose.ui.graphics.Color.Transparent else if (fast) cs.tertiary else cs.primary
     val content = if (!on) cs.onSurfaceVariant else if (fast) cs.onTertiary else cs.onPrimary
     val desc = stringResource(if (fast) R.string.core_fastest_cd else R.string.core_cd, core)
+    val chipShape = RoundedCornerShape(12.dp)
     Surface(
-        shape = RoundedCornerShape(12.dp), color = container, contentColor = content,
+        shape = chipShape, color = container, contentColor = content,
         border = if (on) null else androidx.compose.foundation.BorderStroke(1.dp, cs.outlineVariant),
         modifier = modifier.heightIn(min = 48.dp).semantics { contentDescription = desc }
-            .selectable(on, role = Role.Checkbox, onClick = onClick),
+            .clip(chipShape).selectable(on, role = Role.Checkbox, onClick = onClick),
     ) {
         Row(Modifier.heightIn(min = 48.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Text(core.toString(), style = MaterialTheme.typography.labelLarge)

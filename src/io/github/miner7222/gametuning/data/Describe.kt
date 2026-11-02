@@ -7,6 +7,7 @@ import vendor.lenovo.hardware.gametuning.GameTuningConfig
 import vendor.lenovo.hardware.gametuning.PolicyLimits
 import vendor.lenovo.hardware.gametuning.PolicyProfile
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** One line of "what this preset changes". */
 data class Change(val label: String, val before: String, val after: String)
@@ -40,6 +41,17 @@ fun Context.heatName(thermalCase: Int): String = getString(
         else -> R.string.heat_hottest
     },
 )
+
+/** The display's highest supported refresh rate in Hz. */
+fun Context.peakRefreshRate(): Int = try {
+    display?.supportedModes?.maxOfOrNull { it.refreshRate }?.roundToInt()?.coerceAtLeast(30) ?: 60
+} catch (_: RuntimeException) {
+    60
+}
+
+/** The frame rate a game runs at: its limit, or the display's peak rate when there is none. */
+fun Context.frameRateName(fpsLimit: Int): String =
+    getString(R.string.hz_value, if (fpsLimit > 0) fpsLimit else peakRefreshRate())
 
 fun Context.fpsName(fps: Int): String = if (fps <= 0) getString(R.string.off) else fps.toString()
 

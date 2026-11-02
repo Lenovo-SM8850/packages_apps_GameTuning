@@ -75,7 +75,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -93,6 +92,7 @@ import io.github.miner7222.gametuning.data.Preset
 import io.github.miner7222.gametuning.data.Resource
 import io.github.miner7222.gametuning.data.coolRange
 import io.github.miner7222.gametuning.data.builtinName
+import io.github.miner7222.gametuning.data.frameRateName
 import io.github.miner7222.gametuning.data.heatName
 import io.github.miner7222.gametuning.data.ladder
 import io.github.miner7222.gametuning.data.modeName
@@ -241,10 +241,11 @@ private fun GameCardRow(
     val ctx = LocalContext.current
     val container = if (wide) (if (selected) cs.primaryContainer else Color.Transparent) else cs.surfaceContainer
     val preset = c.presetName ?: ctx.builtinName(c.dedicated)
+    val cardShape = if (wide) RoundedCornerShape(if (selected) 28.dp else 16.dp) else shape
     Surface(
-        shape = if (wide) RoundedCornerShape(if (selected) 28.dp else 16.dp) else shape, color = container,
+        shape = cardShape, color = container,
         contentColor = if (wide && selected) cs.onPrimaryContainer else cs.onSurface,
-        modifier = Modifier.fillMaxWidth().selectable(selected = selected && wide, role = Role.Button, onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clip(cardShape).selectable(selected = selected && wide, role = Role.Button, onClick = onClick),
     ) {
         Row(Modifier.padding(16.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             GameIcon(vm, c.pkg, c.label, if (wide) 48.dp else 56.dp, selected && wide)
@@ -285,6 +286,7 @@ fun ProfilePane(
     val cs = MaterialTheme.colorScheme
     val lib = ps.libs[ps.mode] ?: ModeLibrary(emptyList(), null)
     val current = lib.inUse
+    val hz = ctx.frameRateName(current?.display?.fpsLimit ?: 0)
     var expanded by rememberSaveable { mutableStateOf(false) }
 
     @Composable
@@ -312,11 +314,12 @@ fun ProfilePane(
                     val on = m == ps.mode
                     val name = ctx.modeName(m)
                     val radius by animateDpAsState(if (on) 28.dp else 16.dp, label = "radius")
+                    val cardShape = RoundedCornerShape(radius)
                     Surface(
-                        shape = RoundedCornerShape(radius),
+                        shape = cardShape,
                         color = if (on) cs.primary else cs.surfaceContainer,
                         contentColor = if (on) cs.onPrimary else cs.onSurface,
-                        modifier = Modifier.weight(1f).selectable(selected = on, enabled = ps.tuningEnabled, role = Role.RadioButton) { vm.setMode(pkg, m) },
+                        modifier = Modifier.weight(1f).clip(cardShape).selectable(selected = on, enabled = ps.tuningEnabled, role = Role.RadioButton) { vm.setMode(pkg, m) },
                     ) {
                         Row(
                             Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 10.dp).alpha(if (ps.tuningEnabled) 1f else 0.38f),
@@ -343,9 +346,10 @@ fun ProfilePane(
         Column(Modifier.selectableGroup().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             all.forEach { p ->
                 val on = (p?.id) == lib.inUseId
+                val rowShape = RoundedCornerShape(20.dp)
                 Surface(
-                    shape = RoundedCornerShape(20.dp), color = if (on) cs.primaryContainer else cs.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth().selectable(selected = on, role = Role.RadioButton) {
+                    shape = rowShape, color = if (on) cs.primaryContainer else cs.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth().clip(rowShape).selectable(selected = on, role = Role.RadioButton) {
                         if (!on) vm.usePreset(pkg, ps.mode, p?.id)
                     },
                 ) {
@@ -366,7 +370,10 @@ fun ProfilePane(
         TonalCard(Modifier.fillMaxWidth()) {
             if (wide) {
                 Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.preset_in_use_label, ctx.modeName(ps.mode)), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = cs.primary)
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(stringResource(R.string.preset_in_use_label), style = MaterialTheme.typography.titleSmall, color = cs.primary)
+                        RateTag(hz)
+                    }
                     TextButton(onClick = { nav.push(Route.Presets(pkg, ps.mode)) }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.manage)) }
                 }
                 presetRadioList()
@@ -377,8 +384,11 @@ fun ProfilePane(
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Muted(stringResource(R.string.preset_in_use_label, ctx.modeName(ps.mode)))
-                        Text(current?.name ?: ctx.builtinName(ps.dedicated), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Muted(stringResource(R.string.preset_in_use_label))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(current?.name ?: ctx.builtinName(ps.dedicated), Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            RateTag(hz)
+                        }
                         Muted(presetDiff(ps, vm, ps.mode, current), style = MaterialTheme.typography.bodyMedium)
                     }
                     Surface(shape = RoundedCornerShape(20.dp), color = cs.secondaryContainer, contentColor = cs.onSecondaryContainer) {
@@ -408,15 +418,14 @@ fun ProfilePane(
             val (lo, hi) = eff.coolRange(limits, r)
             return Freq.range(r, ladder[lo], ladder[hi])
         }
-        val fps = current?.display?.fpsLimit ?: 0
-        val heat = ctx.heatName(eff.thermalCase) + " · " + if (fps > 0) stringResource(R.string.fps_value, fps) else stringResource(R.string.no_limit)
         TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(if (wide) 24.dp else 28.dp), if (wide) cs.surfaceContainer else cs.surfaceContainerLow) {
             Column(Modifier.padding(horizontal = if (wide) 20.dp else 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.now_title), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    val pillShape = RoundedCornerShape(24.dp)
                     Surface(
-                        shape = RoundedCornerShape(24.dp), color = cs.secondaryContainer, contentColor = cs.onSecondaryContainer,
-                        modifier = Modifier.clickable { nav.push(Route.Tuning(pkg, ps.mode)) },
+                        shape = pillShape, color = cs.secondaryContainer, contentColor = cs.onSecondaryContainer,
+                        modifier = Modifier.clip(pillShape).clickable { nav.push(Route.Tuning(pkg, ps.mode)) },
                     ) {
                         Row(Modifier.height(48.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Icon(Icons.Rounded.Tune, null, Modifier.size(18.dp))
@@ -431,7 +440,7 @@ fun ProfilePane(
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         ValueCell(stringResource(R.string.res_fastest), range(Resource.PRIME))
-                        ValueCell(stringResource(if (wide) R.string.heat_frame_short else R.string.heat_frame), heat)
+                        ValueCell(stringResource(R.string.heat_limit), ctx.heatName(eff.thermalCase))
                     }
                 }
                 if (!wide) Muted(stringResource(R.string.now_note))
@@ -448,11 +457,7 @@ fun ProfilePane(
     }
 
     val recCount = ps.recordings.size
-    val countText = pluralStringResource(R.plurals.records_count, recCount, recCount)
-    val recText = when {
-        ps.armed -> stringResource(if (wide) R.string.recording_on_count else R.string.next_play_count, countText)
-        else -> countText
-    }
+    val recText = stringResource(R.string.game_chip, stringResource(if (ps.armed) R.string.on else R.string.off), recCount.toString())
 
     @Composable
     fun moreRows() {
@@ -499,17 +504,17 @@ fun ProfilePane(
     @Composable
     fun presetAndNowCard() {
         val eff = ps.effective
-        val fps = current?.display?.fpsLimit ?: 0
         TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(24.dp)) {
             Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.preset_in_use_label, ctx.modeName(ps.mode)), style = MaterialTheme.typography.titleSmall, color = cs.primary)
+                    Text(stringResource(R.string.preset_in_use_label), style = MaterialTheme.typography.titleSmall, color = cs.primary)
                     Surface(Modifier.weight(1f, fill = false), RoundedCornerShape(16.dp), cs.secondaryContainer, cs.onSecondaryContainer) {
                         Text(
                             current?.name ?: ctx.builtinName(ps.dedicated), Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    RateTag(hz)
                 }
                 TextButton(onClick = { nav.push(Route.Presets(pkg, ps.mode)) }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.manage)) }
             }
@@ -519,11 +524,7 @@ fun ProfilePane(
                     ValueCell(stringResource(R.string.res_cpu), speedText(ps.limits, eff, Resource.GOLD), Modifier.weight(1f))
                     ValueCell(stringResource(R.string.res_fastest), speedText(ps.limits, eff, Resource.PRIME), Modifier.weight(1f))
                     ValueCell(stringResource(R.string.res_graphics), speedText(ps.limits, eff, Resource.GPU), Modifier.weight(1f))
-                    ValueCell(
-                        stringResource(R.string.heat_frame_short),
-                        ctx.heatName(eff.thermalCase) + " · " + if (fps > 0) stringResource(R.string.fps_value, fps) else stringResource(R.string.no_limit),
-                        Modifier.weight(1f),
-                    )
+                    ValueCell(stringResource(R.string.heat_limit), ctx.heatName(eff.thermalCase), Modifier.weight(1f))
                 }
             }
         }
@@ -543,10 +544,11 @@ fun ProfilePane(
             tiles.forEachIndexed { i, (title, sub, open) ->
                 val start = if (i == 0) 20.dp else 8.dp
                 val end = if (i == tiles.lastIndex) 20.dp else 8.dp
+                val tileShape = RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end)
                 Surface(
-                    shape = RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end),
+                    shape = tileShape,
                     color = cs.surfaceContainer,
-                    modifier = Modifier.weight(1f).fillMaxHeight().clickable(onClick = open),
+                    modifier = Modifier.weight(1f).fillMaxHeight().clip(tileShape).clickable(onClick = open),
                 ) {
                     Column(Modifier.heightIn(min = 68.dp).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.Center) {
                         Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
@@ -594,6 +596,13 @@ fun ProfilePane(
             }
         }
     }
+}
+
+/** The frame rate next to the preset in use, such as "165Hz". */
+@Composable
+private fun RateTag(text: String) {
+    val cs = MaterialTheme.colorScheme
+    Tag(text, container = cs.surfaceContainerHigh, content = cs.onSurfaceVariant)
 }
 
 @Composable
