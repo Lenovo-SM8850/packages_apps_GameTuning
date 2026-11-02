@@ -36,6 +36,16 @@ class CsvMeta(
     /** Mean power in milliwatts, negative when it was not measured. */
     val averagePowerMw: Int,
     val targetFps: Int,
+    val originalStartEpochMs: Long = startEpochMs,
+    val keepStartMs: Int = 0,
+    val keepEndMs: Int = durationMs,
+    val rangeRevision: Long = 0,
+    val desiredTargetFps: Int = -1,
+    val analysisTargetFps: Int = 0,
+    val diagnosis: Int = 0,
+    val ceilingFps: Int = 0,
+    val causeEvidence: Int = 0,
+    val analysisVersion: Int = 0,
 )
 
 /** One sample in the daemon's own units; [RecordCsv.row] converts it to the file's fixed units. */
@@ -98,6 +108,16 @@ object RecordCsv {
             "mode" to meta.modeLabel,
             "preset" to meta.presetLabel,
             "start" to STAMP.format(start),
+            "original_start_epoch_ms" to meta.originalStartEpochMs.toString(),
+            "keep_start_ms" to meta.keepStartMs.toString(),
+            "keep_end_ms" to meta.keepEndMs.toString(),
+            "range_revision" to meta.rangeRevision.toString(),
+            "desired_target_fps" to meta.desiredTargetFps.toString(),
+            "analysis_target_fps" to meta.analysisTargetFps.toString(),
+            "diagnosis" to meta.diagnosis.toString(),
+            "ceiling_fps" to meta.ceilingFps.toString(),
+            "cause_evidence" to meta.causeEvidence.toString(),
+            "analysis_version" to meta.analysisVersion.toString(),
             "length_s" to (if (meta.durationMs >= 0) scaled(meta.durationMs.toLong(), 1000, 3) else ""),
             "end_reason" to meta.endReason,
             "average_fps" to decimal(meta.averageFps, 1),

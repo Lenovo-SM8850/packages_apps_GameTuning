@@ -67,6 +67,7 @@ private val AXIS_GAP = 6.dp
 @Composable
 fun RecordChart(
     spec: ChartSpec, durationMs: Int, events: List<AutoEvent>, height: Dp, modifier: Modifier = Modifier,
+    originMs: Int = 0, keepBounds: Pair<Int, Int>? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val grid = cs.outlineVariant
@@ -99,12 +100,12 @@ fun RecordChart(
                     val w = size.width
                     val h = size.height
                     fun yOf(v: Float) = h - (v - axis.min) / span * h
-                    fun xOf(ms: Int) = ms.toFloat() / duration * w
+                    fun xOf(ms: Int) = (ms - originMs).toFloat() / duration * w
                     axis.ticks.forEach { drawLine(grid, Offset(0f, yOf(it)), Offset(w, yOf(it)), 1.dp.toPx()) }
                     drawLine(grid, Offset(0f, h), Offset(w, h), 1.dp.toPx())
                     val steps = spec.targetSteps
                     if (steps != null) {
-                        drawTargetSteps(steps, duration, targetColor, ::xOf, ::yOf, axis.min, axis.max)
+                        drawTargetSteps(steps, duration + originMs, targetColor, ::xOf, ::yOf, axis.min, axis.max)
                     } else spec.target?.let { t ->
                         if (t in axis.min..axis.max) {
                             drawLine(
@@ -114,6 +115,10 @@ fun RecordChart(
                         }
                     }
                     for (s in spec.series) drawSeries(s, ::xOf, ::yOf)
+                    keepBounds?.let { (start, end) ->
+                        drawRect(surface.copy(alpha = .72f), Offset.Zero, androidx.compose.ui.geometry.Size(xOf(start).coerceAtLeast(0f), h))
+                        drawRect(surface.copy(alpha = .72f), Offset(xOf(end), 0f), androidx.compose.ui.geometry.Size((w - xOf(end)).coerceAtLeast(0f), h))
+                    }
                 }
                 if (empty && spec.emptyNote != null) {
                     Text(

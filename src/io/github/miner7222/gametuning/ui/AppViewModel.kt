@@ -49,9 +49,14 @@ import io.github.miner7222.gametuning.data.resourceName
 import io.github.miner7222.gametuning.data.retarget
 import io.github.miner7222.gametuning.data.shortSummary
 import io.github.miner7222.gametuning.data.toBase64
+import io.github.miner7222.gametuning.data.capFpsLimit
+import io.github.miner7222.gametuning.data.restoreIndependently
+import io.github.miner7222.gametuning.data.displayAffectsProbe
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
@@ -152,12 +157,15 @@ sealed class Outcome<out T> {
 class Suggestion(
     val name: String, val yours: Boolean, val changes: List<String>, val reason: String,
     val item: ImportItem, val baseMode: Int, val includeExpert: Boolean,
+    val context: AdviceContext, val fpsLimit: Int?,
 )
 
 /** One line of the single change an automatic adjustment proposes. */
 class ChangeLine(val label: String, val before: String, val after: String, val delta: String, val raise: Boolean)
 
-class AutoPlan(val proposal: TuningProposal, val lines: List<ChangeLine>, val observation: String)
+data class AdviceContext(val revision: Long, val settings: String, val display: DisplayValues)
+class AutoPlan(val proposal: TuningProposal, val lines: List<ChangeLine>, val observation: String,
+               val context: AdviceContext, val fpsLimit: Int?)
 
 class CopyTarget(val pkg: String, val mode: Int)
 
@@ -458,6 +466,9 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
 
     private suspend fun applyDisplay(pkg: String, mode: Int, d: DisplayValues, allow: GameAllowances) {
         requireTuningEnabled(pkg)
+        if (displayAffectsProbe(displayControl.readFpsLimit(pkg, mode), displayControl.readResolution(pkg, mode),
+                displayControl.readRefreshRate(pkg), d, displayControl.refreshTarget(d, allow.fpsOverride)))
+            repo.invalidateDisplayProbe(pkg, mode)
         val ok = displayControl.applyGameManager(pkg, mode, d, allow)
         displayControl.applyRefresh(pkg, mode)
         if (!ok) say(s(R.string.display_apply_failed))
@@ -743,7 +754,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
      */
     private fun distinctBuiltIns(items: List<ImportItem.BuiltIn>): List<ImportItem.BuiltIn> {
         fun identity(i: ImportItem.BuiltIn) =
-            i.source.packages.orEmpty().toSortedSet().toString() + i.source.baseModes.orEmpty().sorted()
+            i.source.packages.orEmpty().toSortedSet().toString() + i.source.baseModes?.sorted().orEmpty()
         return items.groupBy { it.title }.values.flatMap { group ->
             val unique = group.distinctBy { identity(it) }
             if (unique.size < 2) unique
@@ -788,9 +799,10 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     fun doImport(
         item: ImportItem, baseMode: Int, targetPkg: String, targetMode: Int,
         replaceInUse: Boolean, includeExpert: Boolean, nameOverride: String? = null,
-        replaceId: String? = null,
+        replaceId: String? = null, adviceInfo: RecordingInfo? = null, adviceContext: AdviceContext? = null, adviceFps: Int? = null,
     ) = launchLocked {
         requireTuningEnabled(targetPkg)
+        if (adviceInfo != null && adviceContext != null) validateAdvice(adviceInfo, adviceContext)
         val lib = buildLibrary(targetPkg, targetMode, repo.tunings())
         val before = Snap(targetPkg, targetMode, lib.presets, lib.inUseId)
         val replaced = if (replaceId != null) lib.presets.firstOrNull { it.id == replaceId } else if (replaceInUse) lib.inUse else null
@@ -822,16 +834,23 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
                 wanted = item.title
             }
         }
+        val targetDisplay = if (adviceContext != null) adviceContext.display.copy(fpsLimit = adviceFps ?: adviceContext.display.fpsLimit) else disp
         val p = if (replaced != null) {
-            Preset(replaced.id, replaced.name, cfg, disp)
+            Preset(replaced.id, replaced.name, cfg, targetDisplay)
         } else {
             val chosen = nameOverride?.trim()?.takeIf { it.isNotEmpty() } ?: wanted
-            Preset(newPresetId(), uniqueName(lib.presets, chosen.take(64)), cfg, disp)
+            Preset(newPresetId(), uniqueName(lib.presets, chosen.take(64)), cfg, targetDisplay)
         }
-        store.upsert(targetPkg, targetMode, p)
-        activate(targetPkg, targetMode, p)
-        reloadLocked()
-        say(s(R.string.imported_as, p.name), undoFor(before))
+        if (adviceContext != null) {
+            val displayBefore = applyAdvice(before, p, adviceFps != null)
+            reloadLocked()
+            say(s(R.string.imported_as, p.name), adviceUndo(before, displayBefore))
+        } else {
+            store.upsert(targetPkg, targetMode, p)
+            activate(targetPkg, targetMode, p)
+            reloadLocked()
+            say(s(R.string.imported_as, p.name), undoFor(before))
+        }
     }
 
     // endregion
@@ -871,11 +890,34 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     /** Every sample of a record, read in pages of 600 and kept for the next screen. */
-    suspend fun samplesFor(id: String): List<RecordingSample> {
-        synchronized(sampleCache) { sampleCache[id] }?.let { return it }
-        val list = repo.samples(id)
-        synchronized(sampleCache) { sampleCache[id] = list }
+    suspend fun samplesFor(id: String, revision: Long? = null): List<RecordingSample> {
+        val expected = revision ?: repo.recording(id).rangeRevision
+        val key = "$id:$expected"
+        synchronized(sampleCache) { sampleCache[key] }?.let { return it }
+        val list = repo.samples(id, expected)
+        if (repo.recording(id).rangeRevision != expected) throw TuningException(IGameTuning.ERROR_INVALID, "Stale range revision")
+        synchronized(sampleCache) { sampleCache[key] = list }
         return list
+    }
+
+    suspend fun rawSamplesFor(info: RecordingInfo): List<RecordingSample> = repo.samples(info.id, info.rangeRevision, raw = true)
+
+    fun keepRange(info: RecordingInfo, startMs: Int, endMs: Int) = launchLocked {
+        val saved = repo.setRange(info, startMs, endMs)
+        synchronized(sampleCache) { sampleCache.clear() }
+        reloadLocked()
+        say(s(R.string.range_saved)) {
+            mutex.withLock {
+                handleFailure {
+                    val current = repo.recording(info.id)
+                    if (current.rangeRevision == saved.rangeRevision) {
+                        repo.setRange(current, info.keepStartMs, info.keepEndMs)
+                        synchronized(sampleCache) { sampleCache.clear() }
+                        reloadLocked()
+                    }
+                }
+            }
+        }
     }
 
     /** The record being written to a CSV file now, if any. */
@@ -910,7 +952,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
 
     fun deleteRecord(id: String) = launchLocked {
         repo.deleteRecording(id)
-        synchronized(sampleCache) { sampleCache.remove(id) }
+        synchronized(sampleCache) { sampleCache.keys.removeAll { it.startsWith("$id:") } }
         reloadLocked()
         say(s(R.string.record_deleted))
     }
@@ -923,11 +965,14 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     /** Up to three settings that fit a record, with their concrete changes and a reason each. */
     suspend fun suggestionsFor(info: RecordingInfo, goal: Int): Outcome<List<Suggestion>> {
         return try {
+            val context = adviceContext(info)
             val recs = repo.recommend(info.id, goal)
+            if (recs.any { it.rangeRevision != info.rangeRevision }) throw TuningException(IGameTuning.ERROR_INVALID, "Stale range revision")
             val limits = repo.limits()
             val sources = repo.profileSources()
             val tunings = repo.tunings()
-            Outcome.Ok(recs.mapNotNull { suggestionFrom(info, it, limits, sources, tunings) })
+            validateAdvice(info, context)
+            Outcome.Ok(recs.mapNotNull { suggestionFrom(info, it, limits, sources, tunings, context) })
         } catch (e: TuningException) {
             Outcome.Failed(e.code)
         }
@@ -935,7 +980,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
 
     private fun suggestionFrom(
         info: RecordingInfo, rec: Recommendation, limits: PolicyLimits, sources: List<ProfileSource>,
-        tunings: List<GameTuningConfig>,
+        tunings: List<GameTuningConfig>, context: AdviceContext,
     ): Suggestion? {
         val tunedPkg = rec.tunedPackage.orEmpty()
         val item: ImportItem
@@ -983,10 +1028,12 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         if (recorded != null && candidate != null && candidate.thermalCase != recorded.thermalCase) {
             chips.add(s(R.string.suggest_dir_heat, app.heatName(recorded.thermalCase), app.heatName(candidate.thermalCase)))
         }
+        val fpsLimit = capFpsLimit(rec.confirmedCap, rec.ceilingFps, context.display.fpsLimit)
+        if (fpsLimit != null) chips.add(s(R.string.cap_fps_limit) + " " + fpsLabel(context.display.fpsLimit) + " → " + fpsLabel(fpsLimit))
         if (chips.isEmpty()) chips.add(s(R.string.suggest_dir_other))
         return Suggestion(
             name, tunedPkg.isNotEmpty(), chips, reasonFor(info, rec), item, rec.baseMode,
-            includeExpert = tunedPkg == info.packageName,
+            includeExpert = tunedPkg == info.packageName, context = context, fpsLimit = fpsLimit,
         )
     }
 
@@ -996,7 +1043,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         fun has(b: Int) = (bits and b) != 0
         val raise = rec.directions?.any { it > 0 } == true
         val lower = rec.directions?.any { it < 0 } == true
-        val target = info.summary.targetFps
+        val target = info.summary.analysisTargetFps.takeIf { it > 0 } ?: info.summary.targetFps
         val hot = tf.absolute(info.summary.maxSkinC.toDouble())
         val out = ArrayList<String>()
         if (raise) {
@@ -1021,10 +1068,15 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     /** The single change the daemon proposes for a record and goal, with an observation line. */
     suspend fun autoPlanFor(info: RecordingInfo, goal: Int): Outcome<AutoPlan> {
         return try {
+            val context = adviceContext(info)
             val p = repo.autoTune(info.id, goal)
+            if (p.rangeRevision != info.rangeRevision) throw TuningException(IGameTuning.ERROR_INVALID, "Stale range revision")
+            val fpsLimit = capFpsLimit(p.confirmedCap, p.ceilingFps, context.display.fpsLimit)
             val limits = repo.limits()
-            val lines = p.changes.orEmpty().mapNotNull { changeLine(limits, it) }
-            Outcome.Ok(AutoPlan(p, lines, observationFor(info, p)))
+            val lines = p.changes.orEmpty().mapNotNull { changeLine(limits, it) }.toMutableList()
+            if (fpsLimit != null) lines.add(0, ChangeLine(s(R.string.cap_fps_limit), fpsLabel(context.display.fpsLimit), fpsLabel(fpsLimit), "", false))
+            validateAdvice(info, context)
+            Outcome.Ok(AutoPlan(p, lines, observationFor(info, p), context, fpsLimit))
         } catch (e: TuningException) {
             Outcome.Failed(e.code)
         }
@@ -1099,37 +1151,157 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     fun applyAutoTune(info: RecordingInfo, plan: AutoPlan, asNew: Boolean, name: String) = launchLocked {
         val pkg = info.packageName
         requireTuningEnabled(pkg)
+        validateAdvice(info, plan.context)
         val mode = info.mode
         val lib = buildLibrary(pkg, mode, repo.tunings())
         val recorded = recordPresetIn(lib.presets, info)
-        val shown = lib.inUse?.display ?: DisplayValues.builtin(mode)
         val before = Snap(pkg, mode, lib.presets, lib.inUseId)
-        val cfg = plan.proposal.tuning.deepCopy()
-        if (!asNew && recorded != null) {
-            store.setStable(pkg, mode, recorded.id, recorded.config)
-            cfg.variantId = recorded.id
-            cfg.variantName = recorded.name
-            val normalized = repo.setTuning(cfg).also { it.ensureArrays() }
-            store.upsert(pkg, mode, Preset(recorded.id, recorded.name, normalized, recorded.display))
-            if (recorded.display != shown) applyDisplay(pkg, mode, recorded.display, games.allowances(pkg))
-            reloadLocked()
-            say(s(R.string.auto_changed, recorded.name), undoFor(before))
-        } else {
-            if (lib.presets.size + 1 >= MAX_PRESETS) {
-                say(s(R.string.preset_limit))
-                return@launchLocked
-            }
-            val finalName = uniqueName(lib.presets, name.trim().take(64).ifEmpty { s(R.string.new_preset) })
-            val id = newPresetId()
-            cfg.variantId = id
-            cfg.variantName = finalName
-            val normalized = repo.setTuning(cfg).also { it.ensureArrays() }
-            val display = recorded?.display ?: DisplayValues.builtin(mode)
-            store.upsert(pkg, mode, Preset(id, finalName, normalized, display))
-            if (display != shown) applyDisplay(pkg, mode, display, games.allowances(pkg))
-            reloadLocked()
-            say(s(R.string.preset_created, finalName), undoFor(before))
+        if ((asNew || recorded == null) && lib.presets.size + 1 >= MAX_PRESETS) {
+            say(s(R.string.preset_limit)); return@launchLocked
         }
+        val replacing = !asNew && recorded != null
+        val id = if (replacing) recorded!!.id else newPresetId()
+        val finalName = if (replacing) recorded!!.name else uniqueName(lib.presets, name.trim().take(64).ifEmpty { s(R.string.new_preset) })
+        val cfg = plan.proposal.tuning.deepCopy().also { it.variantId = id; it.variantName = finalName }
+        val display = plan.context.display.copy(fpsLimit = plan.fpsLimit ?: plan.context.display.fpsLimit)
+        val preset = Preset(id, finalName, cfg, display)
+        val displayBefore = applyAdvice(before, preset, plan.fpsLimit != null)
+        if (replacing) store.setStable(pkg, mode, recorded!!.id, recorded.config)
+        reloadLocked()
+        say(s(if (replacing) R.string.auto_changed else R.string.preset_created, finalName), adviceUndo(before, displayBefore))
+    }
+
+    private fun fpsLabel(limit: Int) = if (limit == 0) s(R.string.off) else limit.toString()
+
+    private suspend fun adviceContext(info: RecordingInfo): AdviceContext {
+        val current = repo.recording(info.id)
+        if (current.rangeRevision != info.rangeRevision) throw TuningException(IGameTuning.ERROR_INVALID, "Stale range revision")
+        val tunings = repo.tunings()
+        val lib = buildLibrary(info.packageName, info.mode, tunings)
+        val target = recordPresetIn(lib.presets, info) ?: lib.inUse
+        val active = tunings.firstOrNull { it.packageName == info.packageName && it.mode == info.mode }
+        val signature = buildString {
+            append(active?.toBase64()); append('|'); append(lib.inUseId)
+            for (p in lib.presets) { append('|'); append(p.id); append(p.name); append(p.config.toBase64()); append(p.display) }
+            append(games.currentMode(info.packageName)); append(games.allowances(info.packageName))
+            append(displayControl.readResolution(info.packageName, info.mode))
+            append(displayControl.readRefreshRate(info.packageName)); append(displayControl.readFpsLimit(info.packageName, info.mode))
+        }
+        val targetDisplay = target?.display ?: DisplayValues.builtin(info.mode)
+        val limits = listOfNotNull(targetDisplay.fpsLimit.takeIf { it > 0 }, lib.inUse?.display?.fpsLimit?.takeIf { it > 0 },
+            displayControl.readFpsLimit(info.packageName, info.mode)?.takeIf { it > 0 })
+        val conservativeDisplay = targetDisplay.copy(fpsLimit = limits.minOrNull() ?: 0)
+        return AdviceContext(info.rangeRevision, signature, conservativeDisplay)
+    }
+
+    private suspend fun validateAdvice(info: RecordingInfo, expected: AdviceContext) {
+        if (adviceContext(info) != expected) throw TuningException(IGameTuning.ERROR_INVALID, "Stale proposal")
+    }
+
+    /** Hardware and app display fields form one transaction; a required FPS intervention must succeed. */
+    private class AdviceDisplaySnapshot(val display: DisplayValues, val refresh: DisplayControl.RefreshSnapshot, val appliedRefresh: Int)
+
+    private suspend fun applyAdvice(before: Snap, preset: Preset, fpsChanged: Boolean): AdviceDisplaySnapshot {
+        val pkg = before.pkg; val mode = before.mode
+        val previous = before.presets.firstOrNull { it.id == before.inUseId }
+        var applied: GameTuningConfig? = null
+        val originalFps = displayControl.readFpsLimit(pkg, mode)
+        val originalScale = displayControl.readResolution(pkg, mode)
+        val refreshBefore = displayControl.snapshotRefresh(pkg)
+        val originalRefresh = refreshBefore.rate
+        val displayBefore = (previous?.display ?: DisplayValues.builtin(mode)).copy(
+            resolution = originalScale, fpsLimit = originalFps ?: previous?.display?.fpsLimit ?: 0)
+        try {
+            if (displayAffectsProbe(originalFps, originalScale, originalRefresh, preset.display,
+                    displayControl.refreshTarget(preset.display, games.allowances(pkg).fpsOverride)))
+                repo.invalidateDisplayProbe(pkg, mode)
+            val cfg = preset.config.deepCopy().also {
+                it.userId = userId; it.packageName = pkg; it.mode = mode; it.enabled = true
+                it.variantId = preset.id; it.variantName = preset.name
+            }
+            applied = repo.setTuning(cfg).also { it.ensureArrays() }
+            val stored = Preset(preset.id, preset.name, applied, preset.display)
+            store.upsert(pkg, mode, stored)
+            if (!displayControl.applyGameManager(pkg, mode, preset.display, games.allowances(pkg), requireFps = fpsChanged))
+                throw TuningException(IGameTuning.ERROR_INVALID, "Display apply failed")
+            displayControl.applyRefresh(pkg, mode)
+            val expectedRefresh = displayControl.refreshTarget(preset.display, true)
+            if (fpsChanged && games.currentMode(pkg) == mode && expectedRefresh > 0 &&
+                displayControl.readRefreshRate(pkg) != expectedRefresh)
+                throw TuningException(IGameTuning.ERROR_INVALID, "Display apply failed")
+            return AdviceDisplaySnapshot(displayBefore, refreshBefore, displayControl.readRefreshRate(pkg))
+        } catch (e: Exception) {
+            withContext(NonCancellable) {
+                val failures = restoreIndependently(
+                    {
+                        val live = repo.tunings().firstOrNull { it.packageName == pkg && it.mode == mode }
+                        if (applied != null && live?.toBase64() == applied.toBase64()) {
+                            if (previous == null) repo.clearTuning(pkg, mode) else repo.setTuning(previous.config)
+                        }
+                    },
+                    {
+                        val nowFps = displayControl.readFpsLimit(pkg, mode)
+                        val nowScale = displayControl.readResolution(pkg, mode)
+                        if ((nowFps == preset.display.fpsLimit && kotlin.math.abs(nowScale - preset.display.resolution) < .01f) ||
+                            (nowFps == originalFps && kotlin.math.abs(nowScale - originalScale) < .01f)) {
+                            if (!displayControl.applyGameManager(pkg, mode, displayBefore, games.allowances(pkg)))
+                                throw TuningException(IGameTuning.ERROR_INVALID, "Display apply failed")
+                        }
+                    },
+                    {
+                        val refresh = displayControl.readRefreshRate(pkg)
+                        if (refresh == originalRefresh || refresh == displayControl.refreshTarget(preset.display, true))
+                            displayControl.restoreRefresh(pkg, refreshBefore, refresh)
+                    },
+                    {
+                        val local = store.list(pkg, mode)
+                        val stillOurs = local.any { it.id == preset.id && it.display == preset.display &&
+                            it.config.toBase64() == applied?.toBase64() }
+                        if (stillOurs || local == before.presets) store.replaceAll(pkg, mode, before.presets)
+                    },
+                )
+                failures.forEach { if (it !== e) e.addSuppressed(it) }
+            }
+            throw e
+        }
+    }
+
+    private suspend fun adviceUndo(before: Snap, displayBefore: AdviceDisplaySnapshot): suspend () -> Unit {
+        val expected = adviceState(before.pkg, before.mode)
+        return {
+            mutex.withLock {
+                handleFailure {
+                    if (adviceState(before.pkg, before.mode) == expected) {
+                        val previous = before.presets.firstOrNull { it.id == before.inUseId }
+                        val failures = withContext(NonCancellable) {
+                            restoreIndependently(
+                                { repo.invalidateDisplayProbe(before.pkg, before.mode) },
+                                { if (previous == null) repo.clearTuning(before.pkg, before.mode) else repo.setTuning(previous.config) },
+                                {
+                                    if (!displayControl.applyGameManager(before.pkg, before.mode, displayBefore.display, games.allowances(before.pkg)))
+                                        throw TuningException(IGameTuning.ERROR_INVALID, "Display apply failed")
+                                },
+                                { displayControl.restoreRefresh(before.pkg, displayBefore.refresh, displayBefore.appliedRefresh) },
+                                { store.replaceAll(before.pkg, before.mode, before.presets) },
+                            )
+                        }
+                        if (failures.isNotEmpty()) {
+                            failures.drop(1).forEach { failures.first().addSuppressed(it) }
+                            throw failures.first()
+                        }
+                        reloadLocked()
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun adviceState(pkg: String, mode: Int): String {
+        val tunings = repo.tunings()
+        val library = buildLibrary(pkg, mode, tunings)
+        return tunings.firstOrNull { it.packageName == pkg && it.mode == mode }?.toBase64().orEmpty() +
+            library.presets.joinToString { it.id + it.config.toBase64() + it.display } +
+            displayControl.readResolution(pkg, mode) + ":" + displayControl.readRefreshRate(pkg) + ":" + displayControl.readFpsLimit(pkg, mode) + ":" + games.currentMode(pkg)
     }
 
     // endregion
@@ -1137,7 +1309,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     // region notice
 
     private suspend fun computeNotice(info: RecordingInfo, limits: PolicyLimits): String? {
-        val samples = try { repo.samples(info.id) } catch (_: TuningException) { return null }
+        val samples = try { repo.samples(info.id, info.rangeRevision) } catch (_: TuningException) { return null }
         if (samples.isEmpty()) return null
         var bestRes = -1
         var bestCount = 0

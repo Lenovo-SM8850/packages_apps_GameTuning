@@ -51,14 +51,14 @@ class DisplayControl(private val context: Context) {
      * Returns false when something could not be applied.
      */
     suspend fun applyGameManager(
-        pkg: String, mode: Int, display: DisplayValues, allow: GameAllowances,
+        pkg: String, mode: Int, display: DisplayValues, allow: GameAllowances, requireFps: Boolean = false,
     ): Boolean = withContext(Dispatchers.IO) {
         displayMutex.withLock {
             if (games.isNoneMode(pkg, userId)) {
                 clearRefreshLocked(pkg)
-                return@withLock true
+                return@withLock !requireFps
             }
-            if (!allow.downscaling || !allow.fpsOverride) return@withLock true
+            if (!allow.downscaling || !allow.fpsOverride) return@withLock !requireFps
             val service = gameService() ?: return@withContext false
             val scaling = if (display.resolution >= 0.9999f) "-1"
             else String.format(java.util.Locale.US, "%.2f", display.resolution)
@@ -69,11 +69,12 @@ class DisplayControl(private val context: Context) {
                 try {
                     service.setGameModeConfigOverride(pkg, userId, mode, fps, scaling)
                 } catch (e: NoSuchMethodError) {
-                    ok = legacyResolution(service, pkg, mode, display, allow)
+                    ok = if (requireFps) false else legacyResolution(service, pkg, mode, display, allow)
                 } catch (e: AbstractMethodError) {
-                    ok = legacyResolution(service, pkg, mode, display, allow)
+                    ok = if (requireFps) false else legacyResolution(service, pkg, mode, display, allow)
                 }
                 if (service.getGameMode(pkg, userId) != previous) service.setGameMode(pkg, previous, userId)
+                if (requireFps && service.getGameModeInfo(pkg, userId)?.getGameModeConfiguration(mode)?.fpsOverride != display.fpsLimit) ok = false
                 ok
             } catch (e: Exception) {
                 Log.w(TAG, "Could not set the game manager override", e)
@@ -91,12 +92,17 @@ class DisplayControl(private val context: Context) {
         return true
     }
 
-    /** True when this game has a per-app refresh rate (key refresh_rate_config_custom). */
-    fun isRefreshLocked(pkg: String): Boolean = try {
-        (context.getSystemService(RefreshRateManager::class.java)?.getRefreshRateForPackage(pkg) ?: -1) > 0
-    } catch (_: Exception) {
-        false
+    suspend fun readFpsLimit(pkg: String, mode: Int): Int? = withContext(Dispatchers.IO) {
+        try { gameService()?.getGameModeInfo(pkg, userId)?.getGameModeConfiguration(mode)?.fpsOverride }
+        catch (_: Exception) { null }
     }
+
+    /** Exact per-app preference, also used to recognize later external edits. */
+    fun readRefreshRate(pkg: String): Int = try {
+        (context.getSystemService(RefreshRateManager::class.java)?.getRefreshRateForPackage(pkg) ?: -1).let { if (it > 0) it else -1 }
+    } catch (_: Exception) { -1 }
+
+    fun isRefreshLocked(pkg: String): Boolean = readRefreshRate(pkg) > 0
 
     /** The per-app refresh rate a preset asks for, or -1 for none. */
     fun refreshTarget(display: DisplayValues, fpsAllowed: Boolean): Int {
@@ -109,6 +115,33 @@ class DisplayControl(private val context: Context) {
         if (display.lockRefresh) return rates.last()
         if (display.fpsLimit > 0 && fpsAllowed) return rates.firstOrNull { it >= display.fpsLimit } ?: rates.last()
         return -1
+    }
+
+    class RefreshSnapshot internal constructor(val rate: Int, internal val journal: Map<String, Int>)
+
+    suspend fun snapshotRefresh(pkg: String): RefreshSnapshot = withContext(Dispatchers.IO) {
+        displayMutex.withLock {
+            RefreshSnapshot(readRefreshRate(pkg), listOf("previous", "applied", "pending").mapNotNull { key ->
+                if (refreshWrites.contains("$pkg.$key")) key to refreshWrites.getInt("$pkg.$key", -1) else null
+            }.toMap())
+        }
+    }
+
+    /** Restore the exact prior preference and ownership journal only while our applied value still matches. */
+    suspend fun restoreRefresh(pkg: String, snapshot: RefreshSnapshot, expected: Int) = withContext(Dispatchers.IO) {
+        displayMutex.withLock {
+            if (ActivityManager.getCurrentUser() != userId || readRefreshRate(pkg) != expected || games.isNoneMode(pkg, userId)) return@withLock
+            val manager = context.getSystemService(RefreshRateManager::class.java) ?: return@withLock
+            if (snapshot.rate > 0) manager.setRefreshRateForPackage(pkg, snapshot.rate)
+            else manager.unsetRefreshRateForPackage(pkg)
+            if (readRefreshRate(pkg) != snapshot.rate) return@withLock
+            val editor = refreshWrites.edit()
+            for (key in listOf("previous", "applied", "pending")) {
+                val value = snapshot.journal[key]
+                if (value == null) editor.remove("$pkg.$key") else editor.putInt("$pkg.$key", value)
+            }
+            editor.commit()
+        }
     }
 
     /** Releases only a recorded write that still matches an applied or pending value. */

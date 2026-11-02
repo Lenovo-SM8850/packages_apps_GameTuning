@@ -241,7 +241,7 @@ fun SuggestScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Boo
         var goal by rememberSaveable { mutableStateOf(IGameTuning.GOAL_BALANCED) }
         var attempt by rememberSaveable { mutableStateOf(0) }
         var saving by rememberSaveable { mutableStateOf<Int?>(null) }
-        val result by produceState<Outcome<List<Suggestion>>?>(null, info.id, goal, attempt) {
+        val result by produceState<Outcome<List<Suggestion>>?>(null, info.id, info.rangeRevision, ps.libs, goal, attempt) {
             value = null
             value = vm.suggestionsFor(info, goal)
         }
@@ -249,7 +249,7 @@ fun SuggestScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Boo
         val saw = sawLines(ctx, vm.tf, ps.limits, info)
 
         fun apply(sg: Suggestion, replace: Boolean, name: String) {
-            vm.doImport(sg.item, sg.baseMode, info.packageName, info.mode, false, sg.includeExpert, name, replaceId = if (replace) recorded?.id else null)
+            vm.doImport(sg.item, sg.baseMode, info.packageName, info.mode, false, sg.includeExpert, name, replaceId = if (replace) recorded?.id else null, adviceInfo = info, adviceContext = sg.context, adviceFps = sg.fpsLimit)
             nav.pop()
         }
 
@@ -441,7 +441,7 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
         )
         val defaultName = stringResource(R.string.auto_new_name, baseName, goalWord)
         var name by rememberSaveable(goal, recorded?.id) { mutableStateOf(defaultName) }
-        val result by produceState<Outcome<AutoPlan>?>(null, info.id, goal, attempt) {
+        val result by produceState<Outcome<AutoPlan>?>(null, info.id, info.rangeRevision, ps.libs, goal, attempt) {
             value = null
             value = vm.autoPlanFor(info, goal)
         }

@@ -77,6 +77,14 @@ private const val EVENT_MERGE_MS = 10_000
 private const val EVENT_MIN_MS = 5_000
 private const val EVENT_LIMIT = 12
 
+/** Keep event spans inside the saved inclusive interval, then expose relative time to every renderer. */
+fun keptAutoEvents(samples: List<RecordingSample>, startMs: Int, endMs: Int): List<AutoEvent> =
+    deriveAutoEvents(samples).mapNotNull { event ->
+        val start = maxOf(startMs, event.timeMs)
+        val end = minOf(endMs, event.timeMs + event.durationMs)
+        if (end <= start) null else event.copy(timeMs = start - startMs, durationMs = end - start)
+    }
+
 /** Automatic adjustments, found from the changes in the recorded ceilings. */
 fun deriveAutoEvents(samples: List<RecordingSample>): List<AutoEvent> {
     if (samples.isEmpty()) return emptyList()

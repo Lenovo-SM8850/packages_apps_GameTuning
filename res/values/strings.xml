@@ -544,4 +544,19 @@
     <string name="obs_met">The game kept its %1$d fps target, so nothing needs to change.</string>
     <string name="obs_none">Nothing in this record points to a change.</string>
     <string name="tuning_off_none">Performance tuning is off because Game Space is set to None.</string>
+
+    <string name="keep_range">Keep range</string>
+    <string name="range_start">Start</string>
+    <string name="range_end">End</string>
+    <string name="range_duration">Duration</string>
+    <string name="range_keep">Keep</string>
+    <string name="range_saved">Range saved</string>
+    <string name="cause_game_cap">Game cap</string>
+    <string name="cause_likely_game_cap">Likely game cap</string>
+    <string name="cause_fps_limited">FPS limited</string>
+    <string name="cause_performance_limited">Performance-limited</string>
+    <string name="cause_thermal_limited">Thermal-limited</string>
+    <string name="cause_mixed_limits">Mixed limits</string>
+    <string name="cause_unclear">Unclear</string>
+    <string name="cap_fps_limit">FPS limit</string>
 </resources>

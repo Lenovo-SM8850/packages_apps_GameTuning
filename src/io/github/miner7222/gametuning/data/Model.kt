@@ -25,6 +25,26 @@ const val GENERIC_PROFILE = "default"
 const val MAX_PRESETS = 10
 val FPS_LIMITS = intArrayOf(0, 30, 45, 60, 90, 120, 144, 165)
 
+/** Smallest supported step above a confirmed historical ceiling; never raises an existing limit. */
+fun capFpsLimit(confirmed: Boolean, ceilingFps: Int, currentLimit: Int): Int? {
+    if (!confirmed || ceilingFps <= 0) return null
+    val limit = FPS_LIMITS.firstOrNull { it > 0 && it >= ceilingFps } ?: return null
+    return limit.takeIf { currentLimit == 0 || currentLimit > it }
+}
+
+/** Each rollback is attempted even when another storage or service is unavailable. */
+suspend fun restoreIndependently(vararg steps: suspend () -> Unit): List<Exception> {
+    val failures = ArrayList<Exception>()
+    for (step in steps) try { step() } catch (e: Exception) { failures.add(e) }
+    return failures
+}
+
+/** Display changes make a hardware-only probe incomparable; unknown FPS is also unsafe. */
+fun displayAffectsProbe(beforeFps: Int?, beforeScale: Float, beforeRefresh: Int,
+                       after: DisplayValues, afterRefresh: Int): Boolean =
+    beforeFps == null || beforeFps != after.fpsLimit || !beforeScale.isFinite() || beforeScale <= 0 ||
+        kotlin.math.abs(beforeScale - after.resolution) >= .0001f || beforeRefresh != afterRefresh
+
 /** App-side values that belong to a preset but are not part of the daemon's tuning. */
 data class DisplayValues(
     val resolution: Float = 1.0f,

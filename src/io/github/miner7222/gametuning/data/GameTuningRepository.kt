@@ -135,11 +135,23 @@ class GameTuningRepository(context: Context) {
     suspend fun autoTune(id: String, goal: Int): TuningProposal = call { it.autoTune(userId, id, goal) }
 
     /** Reads a record in pages of [PAGE] samples. */
-    suspend fun samples(id: String): List<RecordingSample> {
+    suspend fun setRange(info: RecordingInfo, startMs: Int, endMs: Int): RecordingInfo =
+        call { it.setRecordingRange(userId, info.id, startMs, endMs, info.rangeRevision) }
+
+    suspend fun invalidateDisplayProbe(pkg: String, mode: Int) = call { it.invalidateDisplayProbe(userId, pkg, mode) }
+
+    suspend fun recording(id: String): RecordingInfo = allRecordings().firstOrNull { it.id == id }
+        ?: throw TuningException(IGameTuning.ERROR_NOT_FOUND, "No such record")
+
+    suspend fun samples(id: String, revision: Long? = null, raw: Boolean = false): List<RecordingSample> {
+        val expected = revision ?: recording(id).rangeRevision
         val all = ArrayList<RecordingSample>()
         var offset = 0
         while (offset < MAX_SAMPLES) {
-            val part = call { it.getRecordingSamples(userId, id, offset) }
+            val part = call {
+                if (raw) it.getRawRecordingSamples(userId, id, offset, expected)
+                else it.getEffectiveRecordingSamples(userId, id, offset, expected)
+            }
             if (part.isEmpty()) break
             all.addAll(part)
             offset += part.size
@@ -149,10 +161,10 @@ class GameTuningRepository(context: Context) {
     }
 
     /** Hands a record to [onPage] one page of [PAGE] samples at a time, with no cap on its length. */
-    suspend fun forEachSamplePage(id: String, onPage: (List<RecordingSample>) -> Unit) {
+    suspend fun forEachSamplePage(id: String, revision: Long, onPage: (List<RecordingSample>) -> Unit) {
         var offset = 0
         while (offset < EXPORT_LIMIT) {
-            val part = call { it.getRecordingSamples(userId, id, offset) }
+            val part = call { it.getEffectiveRecordingSamples(userId, id, offset, revision) }
             if (part.isEmpty()) break
             onPage(part.asList())
             offset += part.size

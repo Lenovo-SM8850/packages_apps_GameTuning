@@ -18,6 +18,8 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import io.github.miner7222.gametuning.R
+import io.github.miner7222.gametuning.data.DisplayValues
+import io.github.miner7222.gametuning.data.PresetStore
 import io.github.miner7222.gametuning.data.DisplayControl
 import io.github.miner7222.gametuning.data.GameLibrary
 import io.github.miner7222.gametuning.data.GameTuningRepository
@@ -168,12 +170,33 @@ class SessionService : Service() {
             return
         }
         applySessionRefresh(pkg, mode)
+        if (recording) captureRecordingContext(pkg, mode)
         // A profile change inside a session repeats the event; the notice shows once per session.
         if (recording && noticeFor != pkg) {
             noticeFor = pkg
             main.post { Toast.makeText(applicationContext, R.string.rec_toast, Toast.LENGTH_SHORT).show() }
         } else if (!recording && noticeFor == pkg) {
             noticeFor = null
+        }
+    }
+
+    private fun captureRecordingContext(pkg: String, mode: Int) {
+        try {
+            runBlocking {
+                val config = GameTuningRepository(this@SessionService).tunings().firstOrNull {
+                    it.packageName == pkg && it.mode == mode && it.enabled
+                }
+                val chosen = config?.variantId?.let { PresetStore.getInstance(this@SessionService).get(pkg, mode, it)?.display }
+                    ?: DisplayValues.builtin(mode)
+                val allowed = GameLibrary(this@SessionService).allowances(pkg).fpsOverride
+                val refresh = getSystemService(android.hardware.display.DisplayManager::class.java)
+                    ?.getDisplay(android.view.Display.DEFAULT_DISPLAY)?.refreshRate ?: -1f
+                // Off is unknown intent. Actual refresh is retained separately, never treated as a chosen FPS target.
+                daemon?.setRecordingContext(userId, pkg, if (allowed && chosen.fpsLimit > 0) chosen.fpsLimit else -1,
+                    DisplayControl(this@SessionService).readResolution(pkg, mode), refresh)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not capture recording context", e)
         }
     }
 

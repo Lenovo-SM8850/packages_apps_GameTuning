@@ -30,8 +30,8 @@ object RecordExport {
                 val stream = resolver.openOutputStream(uri, "wt") ?: throw IOException("No output stream")
                 BufferedWriter(OutputStreamWriter(stream, Charsets.UTF_8)).use { out ->
                     out.append(RecordCsv.preamble(meta))
-                    repo.forEachSamplePage(info.id) { page ->
-                        for (s in page) out.append(RecordCsv.row(sampleOf(s)))
+                    repo.forEachSamplePage(info.id, info.rangeRevision) { page ->
+                        for (s in page) out.append(RecordCsv.row(sampleOf(s, info.keepStartMs)))
                     }
                 }
             } catch (e: Exception) {
@@ -52,7 +52,11 @@ object RecordExport {
             gameLabel = gameLabel,
             modeLabel = mode,
             presetLabel = mode + " · " + ctx.presetLabel(info),
-            startEpochMs = info.startEpochMs,
+            startEpochMs = info.startEpochMs + info.keepStartMs,
+            originalStartEpochMs = info.startEpochMs,
+            keepStartMs = info.keepStartMs, keepEndMs = info.keepEndMs, rangeRevision = info.rangeRevision,
+            desiredTargetFps = s.desiredTargetFps, analysisTargetFps = s.analysisTargetFps,
+            diagnosis = s.diagnosis, ceilingFps = s.ceilingFps, causeEvidence = s.causeEvidence, analysisVersion = s.analysisVersion,
             durationMs = info.durationMs,
             endReason = RecordCsv.endReasonName(info.endReason),
             averageFps = s.avgFps,
@@ -65,10 +69,10 @@ object RecordExport {
         )
     }
 
-    fun sampleOf(s: RecordingSample): CsvSample {
+    fun sampleOf(s: RecordingSample, keepStartMs: Int = 0): CsvSample {
         val util = s.cpuUtilPermille
         return CsvSample(
-            timeMs = s.timeMs, fps = s.fps, fpsMin = s.fpsMin, targetFps = s.targetFps, jankFrames = s.jankFrames, frames = s.frames,
+            timeMs = s.timeMs - keepStartMs, fps = s.fps, fpsMin = s.fpsMin, targetFps = s.targetFps, jankFrames = s.jankFrames, frames = s.frames,
             maxFrameTimeUs = s.maxFrameTimeUs,
             goldKHz = s.goldKHz, primeKHz = s.primeKHz, gpuHz = s.gpuHz,
             goldCapKHz = s.goldCapKHz, primeCapKHz = s.primeCapKHz, gpuCapHz = s.gpuCapHz,

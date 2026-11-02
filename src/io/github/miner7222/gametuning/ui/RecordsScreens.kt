@@ -51,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -89,7 +90,7 @@ import io.github.miner7222.gametuning.data.TuningException
 import io.github.miner7222.gametuning.data.bucketAverage
 import io.github.miner7222.gametuning.data.bucketHeldLongest
 import io.github.miner7222.gametuning.data.curOf
-import io.github.miner7222.gametuning.data.deriveAutoEvents
+import io.github.miner7222.gametuning.data.keptAutoEvents
 import io.github.miner7222.gametuning.data.formatClock
 import io.github.miner7222.gametuning.data.formatFloat1
 import io.github.miner7222.gametuning.data.formatPower
@@ -107,6 +108,7 @@ import vendor.lenovo.hardware.gametuning.RecordingSample
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.roundToInt
 
 private const val MIN_SAMPLES_FOR_ADVICE = 110
@@ -412,11 +414,6 @@ private fun MetricTile(t: Tile, wide: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
-private fun displayRate(ctx: Context): Int = try {
-    (ctx.display?.refreshRate ?: 60f).roundToInt().coerceAtLeast(30)
-} catch (_: RuntimeException) {
-    60
-}
 
 private fun signed(text: String, value: Double): String = when {
     value > 0.0 -> "+$text"
@@ -437,8 +434,8 @@ private fun ResultBody(
     val cs = MaterialTheme.colorScheme
     val tf = vm.tf
     val sum = info.summary
-    val samples by produceState<List<RecordingSample>?>(null, info.id) {
-        value = try { vm.samplesFor(info.id) } catch (_: TuningException) { emptyList() }
+    val samples by produceState<List<RecordingSample>?>(null, info.id, info.rangeRevision) {
+        value = try { vm.samplesFor(info.id, info.rangeRevision) } catch (_: TuningException) { emptyList() }
     }
     var tab by rememberSaveable { mutableStateOf(0) }
     var showAll by rememberSaveable(info.id) { mutableStateOf(false) }
@@ -446,20 +443,20 @@ private fun ResultBody(
     var pickCompare by rememberSaveable(info.id) { mutableStateOf(false) }
     var compareLabel by rememberSaveable(info.id) { mutableStateOf("") }
 
-    val preset = remember(info.id) { vm.store.get(info.packageName, info.mode, info.profile?.variantId.orEmpty()) }
-    val target = remember(info.id) {
-        val d = preset?.display
-        when {
-            d != null && d.fpsLimit > 0 -> d.fpsLimit
-            // The game's own cap seen in the record; the display rate overstates it for capped games
-            info.summary.targetFps > 0 -> info.summary.targetFps
-            d != null && d.lockRefresh -> vm.displayControl.refreshTarget(d, true).takeIf { it > 0 } ?: displayRate(ctx)
-            else -> displayRate(ctx)
-        }
+    val target = sum.desiredTargetFps
+    var editingRange by rememberSaveable(info.id, info.rangeRevision) { mutableStateOf(false) }
+    val raw by produceState<List<RecordingSample>?>(null, info.id, info.rangeRevision, editingRange) {
+        value = if (editingRange) try { vm.rawSamplesFor(info) } catch (_: TuningException) { emptyList() } else null
+    }
+    var handles by remember(info.id, info.rangeRevision, raw) {
+        val full = raw.orEmpty()
+        val start = full.indexOfFirst { it.timeMs >= info.keepStartMs }.coerceAtLeast(0)
+        val end = full.indexOfLast { it.timeMs <= info.keepEndMs }.coerceAtLeast(start)
+        mutableStateOf(start.toFloat()..end.toFloat())
     }
     val loaded = samples
-    val hit = remember(loaded, target) { loaded?.let { hitPercent(it, target) } }
-    val events = remember(loaded) { loaded?.let { deriveAutoEvents(it) }.orEmpty() }
+    val hit = remember(loaded, target) { loaded?.takeIf { target > 0 }?.let { hitPercent(it, target) } }
+    val events = remember(loaded, info.rangeRevision) { loaded?.let { keptAutoEvents(it, info.keepStartMs, info.keepEndMs) }.orEmpty() }
     val label = ctx.presetLabel(info)
     val advice = ps.tuningEnabled && !sum.mixed && sum.validSamples >= MIN_SAMPLES_FOR_ADVICE
 
@@ -517,6 +514,17 @@ private fun ResultBody(
                 headline(ctx, target, hit, sum.avgFps, cs.primary), fontWeight = FontWeight.Bold,
                 style = if (wide) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge,
             )
+            val causeLabel = stringResource(when (sum.diagnosis) {
+                IGameTuning.DIAGNOSIS_GAME_CAP -> R.string.cause_game_cap
+                IGameTuning.DIAGNOSIS_LIKELY_GAME_CAP -> R.string.cause_likely_game_cap
+                IGameTuning.DIAGNOSIS_FPS_LIMITED -> R.string.cause_fps_limited
+                IGameTuning.DIAGNOSIS_PERFORMANCE_LIMITED -> R.string.cause_performance_limited
+                IGameTuning.DIAGNOSIS_THERMAL_LIMITED -> R.string.cause_thermal_limited
+                IGameTuning.DIAGNOSIS_MIXED_LIMITS -> R.string.cause_mixed_limits
+                else -> R.string.cause_unclear
+            })
+            Text(if (sum.ceilingFps > 0 && sum.diagnosis in IGameTuning.DIAGNOSIS_GAME_CAP..IGameTuning.DIAGNOSIS_LIKELY_GAME_CAP) "$causeLabel · ${stringResource(R.string.fps_value, sum.ceilingFps)}" else causeLabel,
+                style = MaterialTheme.typography.labelLarge, color = cs.primary)
         }
     }
 
@@ -601,14 +609,44 @@ private fun ResultBody(
         Surface(shape = RoundedCornerShape(if (wide) 24.dp else 28.dp), color = cs.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(horizontal = if (wide) 16.dp else 20.dp, vertical = if (wide) 12.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ConnectedChoice(tabs, tab, { tab = it })
-                val data = loaded
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    if (editingRange && (raw?.size ?: 0) <= 1) {
+                        TextButton(onClick = { editingRange = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
+                    } else {
+                        TextButton(onClick = { editingRange = true }, enabled = !editingRange, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.keep_range))
+                        }
+                    }
+                }
+                val data = if (editingRange) raw else loaded
                 if (data == null) {
                     Box(Modifier.fillMaxWidth().height(if (wide) 150.dp else 204.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 } else {
                     val limits = ps.limits
-                    val duration = maxOf(info.durationMs, data.lastOrNull()?.timeMs ?: 0)
+                    val duration = if (editingRange) info.originalDurationMs else info.durationMs
                     val spec = remember(data, tab, target, limits) { chartSpec(ctx, cs, tab, data, limits, tf, target) }
-                    RecordChart(spec, duration, events, if (wide) 150.dp else 204.dp)
+                    val first = if (handles.start.roundToInt() == 0) 0 else data.getOrNull(handles.start.roundToInt())?.timeMs ?: 0
+                    val last = data.getOrNull(handles.endInclusive.roundToInt())?.timeMs ?: duration
+                    RecordChart(spec, duration, if (editingRange) emptyList() else events, if (wide) 150.dp else 204.dp,
+                        originMs = if (editingRange) 0 else info.keepStartMs,
+                        keepBounds = if (editingRange) first to last else null)
+                    if (editingRange && data.size > 1) {
+                        RangeSlider(value = handles, onValueChange = { handles = it.start.roundToInt().toFloat()..it.endInclusive.roundToInt().toFloat() },
+                            valueRange = 0f..data.lastIndex.toFloat(), steps = (data.size - 2).coerceAtLeast(0),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = ctx.getString(R.string.keep_range) })
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text("${stringResource(R.string.range_start)} ${formatClock(first)}")
+                            Text("${stringResource(R.string.range_end)} ${formatClock(last)}")
+                            Text("${stringResource(R.string.range_duration)} ${formatClock(last - first)}")
+                        }
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { vm.keepRange(info, if (handles.start.roundToInt() == 0) 0 else first, last); editingRange = false },
+                                modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.range_keep)) }
+                            OutlinedButton(onClick = { vm.keepRange(info, 0, info.originalDurationMs); editingRange = false },
+                                modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.reset)) }
+                            TextButton(onClick = { editingRange = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
+                        }
+                    }
                 }
             }
         }
