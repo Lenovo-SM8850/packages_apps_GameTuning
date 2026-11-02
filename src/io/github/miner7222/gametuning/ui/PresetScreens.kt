@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -127,7 +128,9 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
     val count = lib.presets.customCount() + 1
     val selId = selected?.takeIf { s -> entries.any { (it?.id ?: BUILTIN) == s } } ?: (lib.inUseId ?: BUILTIN)
     val sel = entries.firstOrNull { (it?.id ?: BUILTIN) == selId }
-    val tabs = Modes.ALL.map { m -> m to ctx.modeName(m) + " · " + (ps.libs[m]!!.presets.customCount() + 1) }
+    val tabCount = { m: Int -> ps.libs[m]!!.presets.customCount() + 1 }
+    val tabs = Modes.ALL.map { m -> m to ctx.modeName(m) + " · " + tabCount(m) }
+    val tabShort: @Composable (Int) -> String? = { m -> modeShortLabel(m)?.let { it + " · " + tabCount(m) } }
 
     val subtitle = stringResource(R.string.presets_sub, ps.label, count, MAX_PRESETS, ctx.modeName(mode))
 
@@ -139,16 +142,16 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
         if (wide) {
             Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { TopBar(stringResource(R.string.presets_title), subtitle, { nav.pop() }) }
-                ConnectedChoice(tabs, mode, { mode = it; selected = null }, Modifier.width(480.dp))
+                ConnectedChoice(tabs, mode, { mode = it; selected = null }, Modifier.width(480.dp), shortOf = tabShort)
             }
         } else {
             TopBar(stringResource(R.string.presets_title), subtitle, { nav.pop() })
-            ConnectedChoice(tabs, mode, { mode = it; selected = null }, Modifier.padding(horizontal = 16.dp).widthIn(max = 640.dp).fillMaxWidth())
+            ConnectedChoice(tabs, mode, { mode = it; selected = null }, Modifier.padding(horizontal = 16.dp).widthIn(max = 640.dp).fillMaxWidth(), shortOf = tabShort)
         }
 
         if (wide) {
-            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Column(Modifier.width(380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(Modifier.width(380.dp).verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     entries.forEachIndexed { i, p ->
                         val on = (p?.id ?: BUILTIN) == selId
                         val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, count, 24.dp)
@@ -181,7 +184,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
         } else {
             Box(Modifier.fillMaxSize()) {
                 Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp)
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = navBottomPadding() + 96.dp)
                         .widthIn(max = 640.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
@@ -221,7 +224,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                 }
                 ExtendedFloatingActionButton(
                     onClick = { if (count < MAX_PRESETS) newSheet = true else Unit },
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(16.dp),
                 ) {
                     Icon(Icons.Rounded.Add, null); Text(stringResource(R.string.new_preset), Modifier.padding(start = 12.dp))
                 }
@@ -327,9 +330,9 @@ private fun PresetActionsSheet(
                     }
                 }
             }
-            ActionRow(Icons.Rounded.Tune, stringResource(if (inUse) R.string.edit_tuning else R.string.use_and_edit), null) {
+            if (inUse) ActionRow(Icons.Rounded.Tune, stringResource(R.string.edit_tuning), null) {
                 onClose()
-                if (inUse) nav.push(Route.Tuning(ps.pkg, mode)) else vm.usePreset(ps.pkg, mode, preset?.id) { nav.push(Route.Tuning(ps.pkg, mode)) }
+                nav.push(Route.Tuning(ps.pkg, mode))
             }
             if (preset != null) {
                 ActionRow(Icons.Rounded.ContentCopy, stringResource(R.string.duplicate), stringResource(R.string.duplicate_note, stringResource(R.string.name_copy, preset.name))) {
@@ -389,7 +392,7 @@ private fun PresetDetail(
     }
     val records = vm.recordsWith(ps, mode, preset?.id)
     val cs = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (preset != null) {
                 NameField(name, { name = it }, Modifier.weight(1f))
@@ -425,13 +428,13 @@ private fun PresetDetail(
                     Text(stringResource(R.string.changes_from_builtin), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
                     val list = changes
                     if (list != null && list.isNotEmpty()) {
-                        list.forEach { c ->
+                        list.forEachIndexed { i, c ->
+                            if (i > 0) androidx.compose.material3.HorizontalDivider(color = cs.outlineVariant)
                             Row(Modifier.heightIn(min = 48.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Text(c.label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                                 Text(c.before + " → ", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                                 Text(c.after, style = MaterialTheme.typography.bodyMedium, color = cs.primary)
                             }
-                            androidx.compose.material3.HorizontalDivider(color = cs.outlineVariant)
                         }
                     } else if (list != null) {
                         Muted(stringResource(R.string.nothing_changed), style = MaterialTheme.typography.bodyMedium)
@@ -471,10 +474,6 @@ private fun PresetDetail(
             }
             if (inUse) {
                 OutlinedButton(onClick = { nav.push(Route.Tuning(ps.pkg, mode)) }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.edit_tuning)) }
-            } else {
-                Button(onClick = { vm.usePreset(ps.pkg, mode, preset?.id) { nav.push(Route.Tuning(ps.pkg, mode)) } }, Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.use_and_edit))
-                }
             }
             Spacer(Modifier.weight(1f))
             if (preset != null) {

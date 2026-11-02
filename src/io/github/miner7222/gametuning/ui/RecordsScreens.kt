@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,7 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -53,7 +54,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -144,26 +144,13 @@ fun RecordsScreen(vm: AppViewModel, nav: Nav, pkg: String, wide: Boolean, openId
     val current = shown.firstOrNull { it.id == picked && it.hasData() } ?: shown.firstOrNull { it.hasData() }
 
     @Composable
-    fun armSwitch(compact: Boolean) {
-        if (compact) {
-            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-                Row(
-                    Modifier.heightIn(min = 48.dp).toggleable(ps.armed, enabled = ps.tuningEnabled, role = Role.Switch) { vm.setArmed(pkg, it) }
-                        .padding(start = 16.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(stringResource(R.string.rec_arm_title), style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = ps.armed, onCheckedChange = null, enabled = ps.tuningEnabled)
-                }
-            }
-        } else {
-            Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
-                SwitchRow(
-                    stringResource(R.string.rec_arm_title), stringResource(R.string.rec_arm_summary), ps.armed, { vm.setArmed(pkg, it) },
-                    enabled = ps.tuningEnabled,
-                    minHeight = 88.dp, padding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-                )
-            }
+    fun armSwitch() {
+        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+            SwitchRow(
+                stringResource(R.string.rec_arm_title), stringResource(R.string.rec_arm_summary), ps.armed, { vm.setArmed(pkg, it) },
+                enabled = ps.tuningEnabled,
+                minHeight = 88.dp, padding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+            )
         }
     }
 
@@ -198,20 +185,18 @@ fun RecordsScreen(vm: AppViewModel, nav: Nav, pkg: String, wide: Boolean, openId
     }
 
     if (wide) {
-        Column(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp)) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) {
-                    TopBar(stringResource(R.string.records_title), stringResource(R.string.records_sub_wide, ps.label), { nav.pop() })
-                }
-                if (all.isNotEmpty()) armSwitch(true)
-            }
+        Column(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp)) {
+            TopBar(stringResource(R.string.records_title), stringResource(R.string.records_sub_wide, ps.label), { nav.pop() })
             if (all.isEmpty()) {
-                // No record yet: one card in the middle, with the recording switch in it.
+                Box(Modifier.fillMaxWidth().padding(bottom = 12.dp), contentAlignment = Alignment.TopCenter) {
+                    Column(Modifier.widthIn(max = 640.dp).fillMaxWidth()) { armSwitch() }
+                }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    EmptyState(Icons.Rounded.BarChart, stringResource(R.string.rec_empty)) { armSwitch(true) }
+                    EmptyState(Icons.Rounded.BarChart, stringResource(R.string.rec_empty))
                 }
             } else Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    armSwitch()
                     chips()
                     list()
                 }
@@ -228,19 +213,20 @@ fun RecordsScreen(vm: AppViewModel, nav: Nav, pkg: String, wide: Boolean, openId
         }
     } else {
         Column(Modifier.fillMaxSize()) {
-            TopBar("", null, { nav.pop() })
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            TopBar(stringResource(R.string.records_title), stringResource(R.string.records_sub_wide, ps.label), { nav.pop() })
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 Column(
-                    Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    Modifier.widthIn(max = 640.dp).fillMaxSize().padding(start = 16.dp, top = 8.dp, end = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(stringResource(R.string.records_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        Muted(stringResource(R.string.records_sub_wide, ps.label), style = MaterialTheme.typography.bodyMedium)
+                    armSwitch()
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        chips()
+                        list()
                     }
-                    armSwitch(false)
-                    chips()
-                    list()
                 }
             }
         }
@@ -395,6 +381,7 @@ private fun ExportMenu(vm: AppViewModel, info: RecordingInfo) {
 
 private class Tile(
     val label: String, val value: String, val hint: String?, val container: Color, val content: Color,
+    val shortLabel: String? = null,
 )
 
 @Composable
@@ -404,7 +391,7 @@ private fun MetricTile(t: Tile, wide: Boolean, modifier: Modifier = Modifier) {
             Modifier.padding(horizontal = if (wide) 12.dp else 16.dp, vertical = if (wide) 10.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(if (wide) 2.dp else 4.dp),
         ) {
-            Text(t.label, style = MaterialTheme.typography.labelMedium, maxLines = 2)
+            FitLabel(t.label, t.shortLabel, style = MaterialTheme.typography.labelMedium, maxLines = 2)
             Text(
                 t.value, style = if (wide) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -476,19 +463,20 @@ private fun ResultBody(
     val dash = "—"
     val avg = Tile(
         ctx.getString(R.string.average_frame_rate), formatFloat1(sum.avgFps.toDouble()),
-        null, primaryTile, primaryOn,
+        null, primaryTile, primaryOn, shortLabelResource(R.string.average_frame_rate_short),
     )
     val floor = Tile(
         ctx.getString(R.string.steady_floor), formatFloat1(sum.floor5Fps.toDouble()),
-        ctx.getString(R.string.tile_floor_hint, 95), plainTile, plainOn,
+        ctx.getString(R.string.tile_floor_hint, 95), plainTile, plainOn, shortLabelResource(R.string.steady_floor_short),
     )
     val temp = Tile(
         ctx.getString(R.string.max_temperature), if (sum.maxSkinC > 0f) tf.absolute(sum.maxSkinC.toDouble()) else dash,
-        ctx.getString(R.string.tile_temp_hint), warmTile, warmOn,
+        ctx.getString(R.string.tile_temp_hint), warmTile, warmOn, shortLabelResource(R.string.max_temperature_short),
     )
     val longest = if (sum.tail95 < 0f) null else Tile(
         ctx.getString(R.string.longest_frames), String.format(Locale.getDefault(), "%.1f×", 1.0 + sum.tail95),
         ctx.getString(if (wide) R.string.tile_longest_hint_l else R.string.tile_longest_hint), plainTile, plainOn,
+        shortLabelResource(R.string.longest_frames_short),
     )
     val stutter = Tile(
         ctx.getString(R.string.stutter), formatFloat1(sum.jankPer1000.toDouble()),
@@ -497,7 +485,7 @@ private fun ResultBody(
     val power = Tile(
         ctx.getString(R.string.power_use), if (sum.avgPowerMw >= 0) formatPower(sum.avgPowerMw) else ctx.getString(R.string.charging),
         ctx.getString(if (sum.avgPowerMw >= 0) R.string.tile_power_hint else R.string.tile_power_none),
-        plainTile, plainOn,
+        plainTile, plainOn, shortLabelResource(R.string.power_use_short),
     )
     val allTiles = if (wide) listOfNotNull(avg, floor, longest, stutter, temp, power) else listOfNotNull(avg, floor, temp, longest, stutter, power)
 
@@ -608,7 +596,19 @@ private fun ResultBody(
         )
         Surface(shape = RoundedCornerShape(if (wide) 24.dp else 28.dp), color = cs.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(horizontal = if (wide) 16.dp else 20.dp, vertical = if (wide) 12.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ConnectedChoice(tabs, tab, { tab = it })
+                ConnectedChoice(
+                    tabs, tab, { tab = it },
+                    shortOf = {
+                        shortLabelResource(
+                            when (it) {
+                                0 -> R.string.tab_frames_short
+                                1 -> R.string.tab_speed_short
+                                2 -> R.string.tab_temp_short
+                                else -> R.string.tab_power_short
+                            },
+                        )
+                    },
+                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     if (editingRange && (raw?.size ?: 0) <= 1) {
                         TextButton(onClick = { editingRange = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
@@ -668,11 +668,11 @@ private fun ResultBody(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { nav.push(Route.Suggest(info.packageName, info.id)) }, enabled = enabled, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
                     Icon(Icons.Rounded.Lightbulb, null, Modifier.size(22.dp))
-                    Text(stringResource(R.string.suggest_title), Modifier.padding(start = 10.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    FitLabel(stringResource(R.string.suggest_title), shortLabelResource(R.string.suggest_title_short), Modifier.padding(start = 10.dp))
                 }
                 FilledTonalButton(onClick = { nav.push(Route.AutoTune(info.packageName, info.id)) }, enabled = enabled, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
                     Icon(Icons.Rounded.Autorenew, null, Modifier.size(22.dp))
-                    Text(stringResource(R.string.auto_title), Modifier.padding(start = 10.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    FitLabel(stringResource(R.string.auto_title), shortLabelResource(R.string.auto_title_short), Modifier.padding(start = 10.dp))
                 }
             }
         }
@@ -690,15 +690,17 @@ private fun ResultBody(
     }
 
     if (wide) {
-        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 16.dp, end = 24.dp, bottom = navBottomPadding() + 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Box(Modifier.weight(1f)) { header() }
                 IconButton(onClick = onDelete, Modifier.size(48.dp)) { Icon(Icons.Rounded.Delete, stringResource(R.string.rec_delete)) }
                 if (RecordExport.available(info)) ExportMenu(vm, info)
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                allTiles.forEach { MetricTile(it, true, Modifier.weight(1f)) }
-                if (allTiles.size < 6) Spacer(Modifier.weight((6 - allTiles.size).toFloat()))
+            allTiles.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { MetricTile(it, true, Modifier.weight(1f).fillMaxHeight()) }
+                    if (row.size < 3) Spacer(Modifier.weight((3 - row.size).toFloat()))
+                }
             }
             compare()
             charts()
@@ -708,7 +710,7 @@ private fun ResultBody(
             actions()
         }
     } else {
-        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.padding(horizontal = 8.dp).padding(bottom = 8.dp)) { header() }
             val rows = (if (showAll) allTiles else allTiles.take(3)).chunked(3)
             rows.forEach { row ->

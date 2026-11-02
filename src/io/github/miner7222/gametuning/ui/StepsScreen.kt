@@ -122,7 +122,9 @@ fun StepsScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boolea
 
     @Composable
     fun stepTitle(i: Int, s: StepVal): String =
-        if (i == 0) stringResource(R.string.step_first) else stringResource(R.string.step_row, i + 1, vm.tf.absolute(s.temp.toDouble()))
+        if (i == 0) steps.getOrNull(1)?.let { stringResource(R.string.step_first_below, vm.tf.absolute(it.temp.toDouble())) }
+            ?: stringResource(R.string.step_first)
+        else stringResource(R.string.step_row, i + 1, vm.tf.absolute(s.temp.toDouble()))
 
     @Composable
     fun addStep() {
@@ -200,7 +202,7 @@ fun StepsScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boolea
                 }
                 Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
                     if (steps.isNotEmpty()) {
-                        Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             stepBody(sel, steps[sel])
                         }
                     }

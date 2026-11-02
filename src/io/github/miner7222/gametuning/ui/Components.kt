@@ -19,10 +19,15 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSizeIn
 import androidx.compose.foundation.layout.size
@@ -88,7 +93,12 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import io.github.miner7222.gametuning.R
+import io.github.miner7222.gametuning.data.Modes
 import kotlin.math.roundToInt
+
+/** Bottom inset a scrolling list adds so its last item clears the navigation bar; zero while the keyboard covers that bar. */
+@Composable
+fun navBottomPadding(): Dp = WindowInsets.navigationBars.exclude(WindowInsets.ime).asPaddingValues().calculateBottomPadding()
 
 /** Corner shape for item [i] of [n] in a grouped list: large outside, small between neighbours. */
 fun groupShape(i: Int, n: Int, big: Dp = 28.dp, small: Dp = 8.dp): Shape =
@@ -183,7 +193,8 @@ fun PageTitle(title: String, subtitle: String? = null, modifier: Modifier = Modi
 /**
  * Connected button group with one selected button: 2 dp apart, 24 dp outer and 6 dp inner corners,
  * and the selected button becomes a full pill. With [wrapColumns] set, a group narrower than
- * [wrapBelow] becomes a connected grid with that many buttons per row.
+ * [wrapBelow] becomes a connected grid with that many buttons per row. A label shows its [shortOf] form
+ * only when the full one does not fit its button.
  */
 @Composable
 fun <T> ConnectedChoice(
@@ -192,13 +203,14 @@ fun <T> ConnectedChoice(
     labelStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelLarge,
     optionEnabled: (T) -> Boolean = { true },
     wrapColumns: Int = 0, wrapBelow: Dp = 480.dp,
+    shortOf: @Composable (T) -> String? = { null },
 ) {
     if (wrapColumns <= 0 || wrapColumns >= options.size) {
-        ChoiceGrid(options, selected, onSelect, modifier, height, enabled, labelStyle, optionEnabled, options.size)
+        ChoiceGrid(options, selected, onSelect, modifier, height, enabled, labelStyle, optionEnabled, options.size, shortOf)
     } else {
         BoxWithConstraints(modifier) {
             val columns = if (maxWidth < wrapBelow) wrapColumns else options.size
-            ChoiceGrid(options, selected, onSelect, Modifier.fillMaxWidth(), height, enabled, labelStyle, optionEnabled, columns)
+            ChoiceGrid(options, selected, onSelect, Modifier.fillMaxWidth(), height, enabled, labelStyle, optionEnabled, columns, shortOf)
         }
     }
 }
@@ -207,7 +219,7 @@ fun <T> ConnectedChoice(
 private fun <T> ChoiceGrid(
     options: List<Pair<T, String>>, selected: T?, onSelect: (T) -> Unit, modifier: Modifier,
     height: Dp, enabled: Boolean, labelStyle: androidx.compose.ui.text.TextStyle, optionEnabled: (T) -> Boolean,
-    columns: Int,
+    columns: Int, shortOf: @Composable (T) -> String?,
 ) {
     val cs = MaterialTheme.colorScheme
     val outer = 24.dp
@@ -240,13 +252,36 @@ private fun <T> ChoiceGrid(
                         ),
                         contentPadding = PaddingValues(horizontal = 2.dp),
                     ) {
-                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = labelStyle)
+                        FitLabel(label, shortOf(value), style = labelStyle)
                     }
                 }
             }
         }
     }
 }
+
+/** The short form of a profile name, or null while the current language has none. Mode 4 is Maximum. */
+@Composable
+fun modeShortLabel(mode: Int): String? = shortLabelResource(
+    when (mode) {
+        Modes.PERFORMANCE -> R.string.mode_performance_short
+        Modes.BATTERY -> R.string.mode_battery_short
+        Modes.BALANCED -> R.string.mode_balanced_short
+        4 -> R.string.mode_maximum_short
+        else -> 0
+    },
+)
+
+/** The short form of a heat limit name, or null while the current language has none. */
+@Composable
+fun heatShortLabel(thermalCase: Int): String? = shortLabelResource(
+    when {
+        thermalCase <= 100 -> R.string.heat_keep_cool_short
+        thermalCase == 200 -> R.string.heat_normal_short
+        thermalCase == 300 -> R.string.heat_warmer_short
+        else -> R.string.heat_hottest_short
+    },
+)
 
 /** The search box of the game list and the import list, with a clear button while it holds text. */
 @Composable

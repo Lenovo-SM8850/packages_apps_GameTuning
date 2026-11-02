@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <resources>
     <string name="app_name">Game performance</string>
-    <string name="settings_summary">Tune speed, heat and display for each game</string>
+    <string name="settings_summary">Tune clock, heat and display for each game</string>
     <string name="not_available">Not available on this device</string>
     <string name="back">Back</string>
     <string name="cancel">Cancel</string>
@@ -22,7 +22,7 @@
     <string name="more_options">More options</string>
     <string name="percent">%1$d%%</string>
     <string name="seconds_value">%1$d s</string>
-    <string name="of_ten">%1$d of 10</string>
+    <string name="of_ten">%1$d / 10</string>
     <string name="lowest">Lowest</string>
     <string name="highest">Highest</string>
 
@@ -40,7 +40,7 @@
     <string name="no_matches">No games match</string>
     <string name="show_all_games">Show all</string>
     <string name="tip_title">Keep several presets per profile</string>
-    <string name="tip_body">Save one preset for long sessions and another for top speed.</string>
+    <string name="tip_body">Save one preset for long sessions and another for max clock.</string>
     <string name="dismiss_tip">Dismiss tip</string>
 
     <!-- Graphics -->
@@ -49,8 +49,12 @@
     <string name="graphics_anisotropic_filtering">Anisotropic filtering</string>
     <string name="graphics_mipmap_lod_bias">Mipmap LOD bias</string>
     <string name="graphics_msaa_limit">MSAA limit</string>
+    <string name="graphics_texture_filtering_desc">Faster modes slightly soften textures to save GPU work.</string>
+    <string name="graphics_anisotropic_filtering_desc">Sharpens textures at steep angles, like distant ground.</string>
+    <string name="graphics_mipmap_lod_bias_desc">Negative sharpens distant textures but uses more GPU; positive blurs them.</string>
+    <string name="graphics_msaa_limit_desc">Limits edge smoothing. Lower saves GPU work but leaves jagged edges.</string>
     <string name="graphics_default">Default</string>
-    <string name="graphics_restart_note">Applies the next time the game starts.</string>
+    <string name="graphics_restart_note">Next launch</string>
 
     <!-- Profile -->
     <string name="profile">Profile</string>
@@ -60,9 +64,9 @@
     <string name="mode_battery">Battery</string>
     <string name="mode_maximum">Maximum</string>
     <string name="builtin_setting">Built-in setting</string>
-    <string name="builtin_game">Built-in · Game</string>
+    <string name="builtin_game">Game</string>
     <string name="builtin_archived">Built-in · %1$s</string>
-    <string name="builtin_generic">Built-in · Generic</string>
+    <string name="builtin_generic">Generic</string>
     <string name="builtin_diff">Game default, no adjustments</string>
     <string name="diff_none">Game default, no adjustments</string>
     <string name="builtin_in_use">Built-in setting in use</string>
@@ -77,17 +81,16 @@
     <string name="now_title">What the game gets now</string>
     <string name="edit_tuning">Edit tuning</string>
     <string name="no_limit">No limit</string>
-    <string name="fps_value">%1$d fps</string>
+    <string name="fps_value">%1$d FPS</string>
     <string name="hz_value">%1$dHz</string>
-    <string name="now_note">Values when the device is cool.</string>
     <string name="tuning_details">Tuning details</string>
     <string name="records_title">Benchmark records</string>
     <string name="import_title">Import a setting</string>
     <string name="expert_title">Expert settings</string>
-    <string name="expert_sub">Scene rows, thread rules, boost behavior</string>
-    <string name="notice_lowered_cpu">Last session: CPU top speed was lowered for %1$d min because the device reached %2$s.</string>
-    <string name="notice_lowered_fastest">Last session: prime core top speed was lowered for %1$d min because the device reached %2$s.</string>
-    <string name="notice_lowered_graphics">Last session: GPU top speed was lowered for %1$d min because the device reached %2$s.</string>
+    <string name="expert_sub">Thread rules, scene rows</string>
+    <string name="notice_lowered_cpu">Last session: CPU max clock was lowered for %1$d min because the device reached %2$s.</string>
+    <string name="notice_lowered_fastest">Last session: prime core max clock was lowered for %1$d min because the device reached %2$s.</string>
+    <string name="notice_lowered_graphics">Last session: GPU max clock was lowered for %1$d min because the device reached %2$s.</string>
     <string name="res_cpu">CPU</string>
     <string name="res_fastest">Prime core</string>
     <string name="res_graphics">GPU</string>
@@ -102,16 +105,16 @@
     <string name="no_records_yet">No records yet</string>
     <string name="last_record">Last record: %1$s</string>
     <string name="charging">Charging</string>
-    <string name="fps_avg_value">%1$s fps</string>
+    <string name="fps_avg_value">%1$s FPS</string>
     <string name="start_from">Start from</string>
     <string name="copy_of_in_use">Copy of %1$s (in use)</string>
     <string name="name_copy">%1$s copy</string>
     <string name="save_name">Save name</string>
-    <string name="use_and_edit">Use and edit tuning</string>
+    
     <string name="use_this_preset">Use this preset</string>
     <string name="duplicate">Duplicate</string>
     <string name="duplicate_note">Makes “%1$s” and uses it</string>
-    <string name="copy_to">Copy to other profiles or games</string>
+    <string name="copy_to">Export preset</string>
     <string name="records_with">Records with this preset · %1$d</string>
     <string name="delete_preset_q">Delete “%1$s”?</string>
     <string name="delete_body">Records keep its name.</string>
@@ -119,7 +122,7 @@
     <string name="changes_from_builtin">Changes from the built-in setting</string>
     <string name="nothing_changed">Nothing changed.</string>
     <string name="recorded_with">Recorded with this preset</string>
-    <string name="average_fps">Average fps</string>
+    <string name="average_fps">Average FPS</string>
     <string name="max_temp">Max temp</string>
     <string name="power">Power</string>
     <string name="see_records">See these records</string>
@@ -133,11 +136,11 @@
     </plurals>
 
     <!-- Preset summaries -->
-    <string name="diff_top">%1$s top %2$s</string>
-    <string name="diff_low">%1$s minimum %2$s</string>
+    <string name="diff_top">%1$s max clock %2$s</string>
+    <string name="diff_low">%1$s min clock %2$s</string>
     <string name="diff_steps">Edited by temperature</string>
-    <string name="diff_heat_higher">Heat limit higher</string>
-    <string name="diff_heat_lower">Heat limit lower</string>
+    <string name="diff_heat_higher">Heat allowance higher</string>
+    <string name="diff_heat_lower">Heat allowance lower</string>
     <string name="diff_temp_target">Temperature target %1$s</string>
     <string name="diff_temp_target_off">No temperature target</string>
     <string name="diff_power_target">Power target %1$s</string>
@@ -146,12 +149,12 @@
     <string name="diff_hold">Hold strength</string>
     <string name="diff_stutter">Stutter boost</string>
     <string name="diff_cores">All cores awake</string>
-    <string name="diff_gpu_idle">GPU idle speed</string>
+    <string name="diff_gpu_idle">GPU idle clock</string>
     <string name="diff_wait">Wait after launch</string>
     <string name="diff_expert">Expert settings</string>
-    <string name="diff_fps">%1$d fps limit</string>
+    <string name="diff_fps">%1$d FPS limit</string>
     <string name="diff_render">Render %1$s</string>
-    <string name="diff_refresh">Refresh rate locked</string>
+    <string name="diff_refresh">Max refresh rate locked</string>
     <string name="diff_more">+%1$d more</string>
     <plurals name="steps_delta">
         <item quantity="one">%1$s step</item>
@@ -159,7 +162,7 @@
     </plurals>
 
     <!-- Copy -->
-    <string name="copy_title">Copy “%1$s”</string>
+    <string name="copy_title">Export “%1$s”</string>
     <string name="other_profiles_of">Other profiles of %1$s</string>
     <string name="this_one">%1$s (this one)</string>
     <string name="already_has">%1$s already has “%2$s”</string>
@@ -171,7 +174,7 @@
     <string name="into_profile">Into %1$s</string>
     <string name="keep_both">Keep both (as “%1$s”)</string>
     <string name="start_using_there">Start using it there</string>
-    <string name="copy_expert_title">Also copy scene rows and thread rules to other games</string>
+    <string name="copy_expert_title">Also export expert settings</string>
     <string name="copy_expert_note_short">Use this only for the same game or engine.</string>
     <string name="copy_summary">Adds “%1$s” to %2$s of this game and %3$s.</string>
     <plurals name="profiles_count">
@@ -191,17 +194,17 @@
     <string name="tuning_sub">%1$s · %2$s · %3$s</string>
     <string name="starts_from_builtin">Starts from the built-in setting · %1$d changes</string>
     <string name="starts_from_other">Starts from another setting · %1$d changes</string>
-    <string name="speed_and_heat">Speed and heat</string>
-    <string name="speed">Speed</string>
-    <string name="speed_foot">Higher speeds heat up sooner.</string>
+    <string name="speed_and_heat">Clock and heat</string>
+    <string name="speed">Clock</string>
+    <string name="speed_foot">Higher clocks heat up sooner.</string>
     <string name="exact_steps_for">Pick exact steps for %1$s</string>
     <string name="cd_reset_row">Reset %1$s to the built-in setting</string>
     <string name="same_as_builtin">Same as built-in</string>
     <string name="builtin_range">Built-in %1$s · Max %2$s</string>
-    <string name="change_top">%1$s top speed</string>
-    <string name="change_low">%1$s minimum speed</string>
-    <string name="heat_limit">Heat limit</string>
-    <string name="heat_hint_wide">Higher limits keep speed longer but run warmer.</string>
+    <string name="change_top">%1$s max clock</string>
+    <string name="change_low">%1$s min clock</string>
+    <string name="heat_limit">Heat allowance</string>
+    <string name="heat_hint_wide">Higher allowance keeps clocks longer but runs warmer.</string>
     <string name="heat_keep_cool">Low</string>
     <string name="heat_normal">Normal</string>
     <string name="heat_warmer">High</string>
@@ -210,35 +213,41 @@
     <string name="boosts">Boosts</string>
     <string name="display">Display</string>
     <string name="advanced">Advanced</string>
-    <string name="targets_sum">Temperature %1$s · Power %2$s</string>
-    <string name="boosts_sum">Ramp-up %1$d of 10 · Hold %2$s · Stutter boost %3$s</string>
-    <string name="display_sum">%1$s · %2$s · %3$s</string>
-    <string name="refresh_locked">Refresh rate locked</string>
-    <string name="refresh_free">Refresh rate not locked</string>
-    <string name="advanced_sum">Cores, idle speed, threads, temperature steps</string>
-    <string name="advanced_sum_wide">Cores, idle speed, threads, steps</string>
+    <string name="section_speed_desc">Clock ranges and heat allowance</string>
+    <string name="section_targets_desc">Temperature and power limits</string>
+    <string name="section_boosts_desc">Clock boosts and frame response</string>
+    <string name="section_display_desc">Resolution, FPS and refresh rate</string>
+    <string name="section_graphics_desc">Texture filtering and edge smoothing</string>
+    <string name="section_advanced_desc">Cores, threads and temperature steps</string>
+    <string name="section_low_battery_desc">Reduce tuning at low battery</string>
+    <string name="cd_changed_from_default">Changed from default</string>
+    
+    
+    
+    
+    
     <string name="temp_target">Temperature target</string>
-    <string name="temp_target_desc">Speeds drop early to stay under this.</string>
+    <string name="temp_target_desc">Clocks drop early to stay under this.</string>
     <string name="power_target">Power target</string>
     <string name="power_target_desc">Average power limit</string>
     <string name="ramp_up">Ramp-up speed</string>
-    <string name="ramp_up_desc">Speed rise on frame drops. 0 is off.</string>
+    <string name="ramp_up_desc">Clock rise on frame drops. 0 is off.</string>
     <string name="hold_strength">Hold strength</string>
-    <string name="hold_desc">How strongly game work stays on fast cores</string>
+    <string name="hold_desc">How strongly game work stays on high clocks and prime cores</string>
     <string name="stutter_boost">Stutter boost</string>
-    <string name="stutter_desc">Brief speed boost for late frames</string>
+    <string name="stutter_desc">Brief clock boost for late frames</string>
     <string name="render_resolution">Render resolution</string>
     <string name="render_desc">Lower is cooler but less sharp.</string>
     <string name="render_blocked">This game doesn\'t allow changing its resolution.</string>
-    <string name="fps_limit">Frame rate limit</string>
-    <string name="fps_desc">Uses a refresh rate at or above the limit.</string>
-    <string name="fps_blocked">This game doesn\'t allow a frame rate limit.</string>
-    <string name="lock_refresh">Lock refresh rate</string>
-    <string name="lock_refresh_desc">Always uses the highest refresh rate</string>
+    <string name="fps_limit">FPS limit</string>
+    <string name="fps_desc">Caps the game\'s FPS and sets the screen\'s refresh rate to match it during play.</string>
+    <string name="fps_blocked">This game doesn\'t allow an FPS limit.</string>
+    <string name="lock_refresh">Lock to max refresh rate</string>
+    <string name="lock_refresh_desc">Refresh rate won\'t drop during play. Uses more battery.</string>
     <string name="cores_awake">Keep all cores awake</string>
     <string name="cores_desc">Helps heavy scenes, uses more battery.</string>
-    <string name="gpu_idle">GPU idle speed</string>
-    <string name="gpu_idle_desc">Starting GPU speed</string>
+    <string name="gpu_idle">GPU idle clock</string>
+    <string name="gpu_idle_desc">Starting GPU clock</string>
     <string name="wait_after_launch">Wait after launch</string>
     <string name="wait_desc">Raise if loading is unstable.</string>
     <string name="thread_placement">Game thread placement</string>
@@ -253,7 +262,6 @@
     </plurals>
     <string name="not_saved_in_presets">Not saved in presets</string>
     <string name="low_battery">Low battery protection</string>
-    <string name="low_battery_desc">Turns off adjustments when the battery is low.</string>
     <string name="below_percent">Below %1$d%%</string>
     <string name="go_back_stable">Go back to last stable setting</string>
     <string name="reset_preset">Reset this preset</string>
@@ -268,26 +276,27 @@
     <string name="save_failed">Couldn\'t save.</string>
     <string name="display_apply_failed">Some display values couldn\'t be applied.</string>
     <string name="saved_to">Saved to %1$s · %2$s</string>
-    <string name="saved_speed">%1$s speed %2$s</string>
+    <string name="saved_speed">%1$s clock %2$s</string>
     <string name="saved_reset">%1$s reset to the built-in setting</string>
-    <string name="saved_heat">Heat limit: %1$s</string>
+    <string name="saved_heat">Heat allowance: %1$s</string>
     <string name="saved_temp_target">Temperature target %1$s</string>
     <string name="saved_power_target">Power target %1$s</string>
     <string name="saved_ramp">Ramp-up speed %1$d</string>
     <string name="saved_hold">Hold strength %1$s</string>
     <string name="saved_stutter">Stutter boost: %1$s</string>
     <string name="saved_render">Render resolution %1$s</string>
-    <string name="saved_fps">Frame rate limit: %1$s</string>
-    <string name="saved_lock">Lock refresh rate: %1$s</string>
+    <string name="saved_fps">FPS limit: %1$s</string>
+    <string name="saved_lock">Lock to max refresh rate: %1$s</string>
     <string name="saved_cores">Keep all cores awake: %1$s</string>
-    <string name="saved_gpu_idle">GPU idle speed: %1$s</string>
+    <string name="saved_gpu_idle">GPU idle clock: %1$s</string>
     <string name="saved_wait">Wait after launch %1$d s</string>
     <string name="saved_threads">Game thread placement</string>
 
     <!-- Steps -->
     <string name="steps_title">Temperature steps</string>
-    <string name="steps_intro">Each step\'s speeds apply once the device reaches its temperature.</string>
-    <string name="step_first">Step 1: cool</string>
+    <string name="steps_intro">Each step\'s clocks apply once the device reaches its temperature.</string>
+    <string name="step_first">Step 1</string>
+    <string name="step_first_below">Step 1: below %1$s</string>
     <string name="step_row">Step %1$d: from %2$s</string>
     <string name="steps_temp_title">Starts at</string>
     <string name="step_add">Add a step</string>
@@ -304,7 +313,7 @@
     <string name="reset_expert">Reset expert settings</string>
     <string name="saved_expert_reset">Expert settings reset</string>
     <string name="scene_rows">Scene rows</string>
-    <string name="scene_support_note">Only for games using the Tencent performance SDK</string>
+    <string name="scene_support_note">Requires game scene support</string>
     <string name="scene_rows_n">Scene rows · %1$d</string>
     <string name="no_scene_rows">No scene rows</string>
     <string name="thread_rules">Thread rules</string>
@@ -315,7 +324,7 @@
     <string name="rules_sum">%1$d rules · %2$d real-time</string>
     <string name="boost_sum">%1$d ms · %2$s · %3$s</string>
     <string name="use_scene_settings">Use scene settings</string>
-    <string name="use_scene_desc">Rows set speeds for a time when a scene starts.</string>
+    <string name="use_scene_desc">Rows set clocks for a time when a scene starts.</string>
     <string name="saved_scene_mode">Scene settings: %1$s</string>
     <string name="scenes_seen">Seen in your last record: %1$s</string>
     <string name="scene_n">Scene %1$d</string>
@@ -360,7 +369,7 @@
     <string name="sensitivity_medium">Medium</string>
     <string name="sensitivity_high">High</string>
     <string name="temp_smoothing">Temperature smoothing</string>
-    <string name="smoothing_desc">Cooling needed before speeds rise</string>
+    <string name="smoothing_desc">Cooling needed before clocks rise</string>
     <string name="saved_boost_length">Boost length %1$d ms</string>
     <string name="saved_sensitivity">Drop sensitivity</string>
     <string name="saved_smoothing">Temperature smoothing</string>
@@ -383,14 +392,14 @@
     <string name="save_as">Save as</string>
     <string name="new_preset_use_named">New preset “%1$s” and start using it</string>
     <string name="replace_named">Replace “%1$s”</string>
-    <string name="also_expert">Also use its scene rows and thread rules</string>
-    <string name="also_expert_note">Best only for the same game or engine.</string>
+    <string name="also_expert">Also import expert settings</string>
+    <string name="also_expert_note">Copies thread rules and scene rows too. Best for the same game or engine.</string>
     <string name="imported_as">Now using “%1$s”</string>
 
     <!-- Records -->
     <string name="rec_toast">Benchmark recording is on</string>
     <string name="rec_arm_title">Record when the game runs</string>
-    <string name="rec_arm_summary">Saves frame rate, speeds, temperature and power.</string>
+    <string name="rec_arm_summary">Saves FPS, clocks, temperature and power.</string>
     <string name="records_sub_wide">%1$s · latest 20 kept</string>
     <string name="rec_empty">No records yet</string>
     <string name="rec_pick_none">No results to show yet.</string>
@@ -410,10 +419,10 @@
     <string name="retry">Try again</string>
 
     <!-- Result -->
-    <string name="result_head_avg">Averaged %1$s fps</string>
+    <string name="result_head_avg">Averaged %1$s FPS</string>
     <string name="result_head_kept">Kept your %1$s target %2$d%% of the time</string>
     <string name="result_head_missed">Reached your %1$s target only %2$d%% of the time</string>
-    <string name="average_frame_rate">Average frame rate</string>
+    <string name="average_frame_rate">Average FPS</string>
     <string name="steady_floor">Steady floor</string>
     <string name="max_temperature">Max temperature</string>
     <string name="longest_frames">Longest frames</string>
@@ -433,7 +442,7 @@
     <string name="compare_inline">Compared with %1$s: %2$s</string>
     <string name="compare_pick">Compare with</string>
     <string name="compare_none">No other %1$s record to compare.</string>
-    <string name="compare_avg">Average %1$s fps</string>
+    <string name="compare_avg">Average %1$s FPS</string>
     <string name="compare_temp">Max temperature %1$s</string>
     <string name="compare_power">Power %1$s W</string>
     <string name="scenes_label">Scenes: %1$s</string>
@@ -445,18 +454,18 @@
     <string name="see_why">See why</string>
     <string name="dur_min">%1$d min</string>
     <string name="dur_sec">%1$d s</string>
-    <string name="event_line">%1$s · %2$s top speed lowered for %3$s at %4$s</string>
-    <string name="event_line_cool">%1$s · %2$s top speed lowered for %3$s</string>
+    <string name="event_line">%1$s · %2$s max clock lowered for %3$s at %4$s</string>
+    <string name="event_line_cool">%1$s · %2$s max clock lowered for %3$s</string>
     <string name="tab_frames">Frames</string>
-    <string name="tab_speed">Speed</string>
+    <string name="tab_speed">Clock</string>
     <string name="tab_temp">Temp</string>
     <string name="tab_power">Power</string>
-    <string name="chart_fps_desc">Frame rate chart.</string>
-    <string name="chart_fps_legend">Frame rate (fps)</string>
-    <string name="fps_axis_top">%1$s fps</string>
-    <string name="chart_target_legend">Dashed = %1$d fps target</string>
-    <string name="chart_target_legend_varies">Dashed = fps target</string>
-    <string name="chart_speed_desc">Speed chart.</string>
+    <string name="chart_fps_desc">FPS chart.</string>
+    <string name="chart_fps_legend">FPS</string>
+    <string name="fps_axis_top">%1$s FPS</string>
+    <string name="chart_target_legend">Dashed = %1$d FPS target</string>
+    <string name="chart_target_legend_varies">Dashed = FPS target</string>
+    <string name="chart_speed_desc">Clock chart.</string>
     <string name="chart_graphics_pct">GPU (percent of max)</string>
     <string name="chart_temp_desc">Temperature chart.</string>
     <string name="chart_surface">Device surface</string>
@@ -474,18 +483,18 @@
     <string name="goal_title">What matters most?</string>
     <string name="goal">Goal</string>
     <string name="goal_frames">Smooth frames</string>
-    <string name="goal_frames_hint">Raise speeds where limited</string>
+    <string name="goal_frames_hint">Raise clocks where limited</string>
     <string name="goal_balanced">Balanced</string>
-    <string name="goal_balanced_hint">Fix shortfalls, trim unused speed</string>
+    <string name="goal_balanced_hint">Fix shortfalls, trim unused clock</string>
     <string name="goal_efficiency">Cool and long battery</string>
-    <string name="goal_efficiency_hint">Lower unused speeds</string>
+    <string name="goal_efficiency_hint">Lower unused clocks</string>
     <string name="what_we_saw">What we saw</string>
-    <string name="saw_kept">Kept the %1$d fps target %2$d%% of the time.</string>
-    <string name="saw_missed">Reached the %1$d fps target %2$d%% of the time.</string>
-    <string name="saw_pegged">%1$s ran at its top speed %2$d%% of the time.</string>
-    <string name="saw_low_one">%1$s mostly ran below half its top speed.</string>
-    <string name="saw_low_many">%1$s mostly ran below half their top speed.</string>
-    <string name="saw_throttled">Heat held speeds back %1$d%% of the time.</string>
+    <string name="saw_kept">Kept the %1$d FPS target %2$d%% of the time.</string>
+    <string name="saw_missed">Reached the %1$d FPS target %2$d%% of the time.</string>
+    <string name="saw_pegged">%1$s ran at its max clock %2$d%% of the time.</string>
+    <string name="saw_low_one">%1$s mostly ran below half its max clock.</string>
+    <string name="saw_low_many">%1$s mostly ran below half their max clock.</string>
+    <string name="saw_throttled">Heat held clocks back %1$d%% of the time.</string>
     <string name="saw_reached">Reached %1$s.</string>
     <string name="suggest_dialog_title">Settings that fit this record</string>
     <string name="suggest_none">No better setting was found.</string>
@@ -497,17 +506,17 @@
     <string name="save_as_new_preset">Save as new preset</string>
     <string name="save_as_preset">Save as preset</string>
     <string name="replace_preset_named">Replace %1$s</string>
-    <string name="suggest_dir_steps">%1$s top %2$s (%3$s → %4$s)</string>
-    <string name="suggest_dir_higher">%1$s top higher</string>
-    <string name="suggest_dir_lower">%1$s top lower</string>
-    <string name="suggest_dir_heat">Heat limit: %1$s → %2$s</string>
+    <string name="suggest_dir_steps">%1$s max clock %2$s (%3$s → %4$s)</string>
+    <string name="suggest_dir_higher">%1$s max clock up</string>
+    <string name="suggest_dir_lower">%1$s max clock down</string>
+    <string name="suggest_dir_heat">Heat allowance: %1$s → %2$s</string>
     <string name="suggest_dir_other">Different temperature steps</string>
-    <string name="reason_target_met">The game kept its target of %1$d fps.</string>
-    <string name="reason_fps_short">The frame rate often fell below %1$d fps.</string>
+    <string name="reason_target_met">The game kept its target of %1$d FPS.</string>
+    <string name="reason_fps_short">FPS often fell below %1$d.</string>
     <string name="reason_cpu_bound">The CPU was at its limit.</string>
     <string name="reason_gpu_bound">GPU was at its limit.</string>
     <string name="reason_thermal">Heat slowed the device down.</string>
-    <string name="reason_over">Unused speed was costing battery.</string>
+    <string name="reason_over">Unused clock was costing battery.</string>
     <string name="reason_hot">The device reached %1$s.</string>
     <string name="reason_no_power">Power wasn\'t measured because the device was charging.</string>
     <string name="reason_generic">The closest match to how this game behaved.</string>
@@ -547,20 +556,20 @@
         <item quantity="other">%d levels lower</item>
     </plurals>
     <string name="obs_thermal">The device got close to its temperature target, so heat comes first.</string>
-    <string name="obs_short_gpu">Frames fell short in heavy scenes while the GPU ran at its top speed.</string>
-    <string name="obs_short_cpu">Frames fell short in heavy scenes while the CPU ran at its top speed.</string>
-    <string name="obs_short">Frames often fell short of the %1$d fps target.</string>
-    <string name="obs_unused">%1$s mostly ran below half its top speed.</string>
-    <string name="obs_met">The game kept its %1$d fps target, so nothing needs to change.</string>
+    <string name="obs_short_gpu">Frames fell short in heavy scenes while the GPU ran at its max clock.</string>
+    <string name="obs_short_cpu">Frames fell short in heavy scenes while the CPU ran at its max clock.</string>
+    <string name="obs_short">Frames often fell short of the %1$d FPS target.</string>
+    <string name="obs_unused">%1$s mostly ran below half its max clock.</string>
+    <string name="obs_met">The game kept its %1$d FPS target, so nothing needs to change.</string>
     <string name="obs_none">Nothing in this record points to a change.</string>
     <string name="tuning_off_none">Performance tuning is off because Game Space is set to None.</string>
 
-    <string name="keep_range">Keep range</string>
+    <string name="keep_range">Trim</string>
     <string name="range_start">Start</string>
     <string name="range_end">End</string>
     <string name="range_duration">Duration</string>
-    <string name="range_keep">Keep</string>
-    <string name="range_saved">Range saved</string>
+    <string name="range_keep">Apply</string>
+    <string name="range_saved">Trim applied</string>
     <string name="cause_game_cap">Game cap</string>
     <string name="cause_likely_game_cap">Likely game cap</string>
     <string name="cause_fps_limited">FPS limited</string>
@@ -569,4 +578,41 @@
     <string name="cause_mixed_limits">Mixed limits</string>
     <string name="cause_unclear">Unclear</string>
     <string name="cap_fps_limit">FPS limit</string>
+
+    <!-- Short forms, shown only where the full word does not fit -->
+    <string name="mode_performance_short">Perf</string>
+    <string name="mode_balanced_short">Balance</string>
+    <string name="mode_battery_short">Saver</string>
+    <string name="mode_maximum_short">Max</string>
+    <string name="filter_adjusted_short">Edited</string>
+    <string name="filter_recording_short">Rec</string>
+    <string name="res_fastest_short">Prime</string>
+    <string name="heat_limit_short">Heat</string>
+    <string name="heat_keep_cool_short">Low</string>
+    <string name="heat_normal_short">Normal</string>
+    <string name="heat_warmer_short">High</string>
+    <string name="heat_hottest_short">Max</string>
+    <string name="your_presets_short">Yours</string>
+    <string name="builtin_settings_short">Built-in</string>
+    <string name="keep_both_short">Keep both</string>
+    <string name="goal_frames_short">Smooth</string>
+    <string name="goal_balanced_short">Balance</string>
+    <string name="goal_efficiency_short">Efficient</string>
+    <string name="thread_rules_n_short">Threads · %1$d</string>
+    <string name="boost_behavior_short">Boosts</string>
+    <string name="scene_rows_n_short">Scenes · %1$d</string>
+    <string name="tab_frames_short">FPS</string>
+    <string name="tab_speed_short">Clock</string>
+    <string name="tab_temp_short">Temp</string>
+    <string name="tab_power_short">Power</string>
+    <string name="average_frame_rate_short">Avg fps</string>
+    <string name="steady_floor_short">Floor</string>
+    <string name="max_temperature_short">Max temp</string>
+    <string name="longest_frames_short">Long frames</string>
+    <string name="power_use_short">Power</string>
+    <string name="suggest_title_short">Suggest</string>
+    <string name="auto_title_short">Auto</string>
+    <string name="all_games">All games</string>
+    
+    <string name="not_saved_global">Not saved in presets · All games</string>
 </resources>

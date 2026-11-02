@@ -14,9 +14,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
@@ -199,7 +203,8 @@ fun AppRoot(vm: AppViewModel, deepLink: String?, onDeepLinkConsumed: () -> Unit)
     BackHandler(enabled = nav.canPop) { nav.pop() }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        val insets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(insets).imePadding()) {
             val wide = maxWidth >= 840.dp
             val top = nav.top
             when (vm.available) {
@@ -234,7 +239,9 @@ fun AppRoot(vm: AppViewModel, deepLink: String?, onDeepLinkConsumed: () -> Unit)
             }
             shown?.let { m ->
                 androidx.compose.material3.Snackbar(
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).widthIn(max = 560.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(16.dp).widthIn(max = 560.dp),
                     action = {
                         if (m.undo != null) {
                             androidx.compose.material3.TextButton(onClick = {
@@ -288,7 +295,7 @@ private fun Screen(
             if (wide) {
                 // A search or filter with no result leaves no game on the right.
                 val noMatch = vm.cards.isNotEmpty() && filterCards(vm.cards, query, filter).isEmpty()
-                Row(Modifier.fillMaxSize().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Row(Modifier.fillMaxSize().padding(start = 24.dp, top = 24.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     GameListPane(vm, true, wideSelected, pick, query, { query = it }, filter, { filter = it }, Modifier.width(360.dp).fillMaxSize())
                     Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
                         if (noMatch) {

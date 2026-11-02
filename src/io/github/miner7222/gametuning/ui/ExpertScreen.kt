@@ -88,7 +88,7 @@ private const val MAX_SCENES = 32
 private const val MAX_RULES = 16
 private const val MAX_RT_RULES = 8
 
-private enum class ExpertSec { THREADS, BOOST, SCENES }
+private enum class ExpertSec { THREADS, SCENES }
 
 private fun sceneRows(st: TuningState): List<SceneRow> =
     (if (st.config.scenes.isNotEmpty()) st.config.scenes else st.effective.scenes ?: emptyArray()).toList()
@@ -135,11 +135,9 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
     val current = scenes.firstOrNull { it.sceneId == selScene } ?: scenes.firstOrNull()
     val presetName = st.preset?.name ?: ctx.builtinName(st.dedicated)
     val subtitle = stringResource(R.string.tuning_sub, st.label, stringResource(AppViewModel.modeLabelRes(mode)), presetName)
-    val section = ExpertSec.valueOf(sec).takeUnless { it == ExpertSec.SCENES && !st.scenesSupported }
-        ?: ExpertSec.THREADS
+    val section = ExpertSec.values().firstOrNull { it.name == sec } ?: ExpertSec.THREADS
     val secs = listOf(
         ExpertSec.THREADS to stringResource(R.string.thread_rules_n, rules.size),
-        ExpertSec.BOOST to stringResource(R.string.boost_behavior),
         ExpertSec.SCENES to stringResource(R.string.scene_rows_n, scenes.size),
     )
     val reset: @Composable () -> Unit = {
@@ -157,33 +155,34 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
     Column(Modifier.fillMaxSize()) {
         if (wide) {
             TopBar(stringResource(R.string.expert_title), subtitle, { nav.pop() }, Modifier.padding(horizontal = 24.dp))
-            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Row(Modifier.weight(1f).fillMaxWidth().padding(start = 24.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     secs.forEachIndexed { i, (s, title) ->
                         val on = s == section
-                        val enabled = s != ExpertSec.SCENES || st.scenesSupported
                         val itemShape = if (on) RoundedCornerShape(28.dp) else groupShape(i, secs.size, 24.dp)
                         Surface(
                             shape = itemShape,
                             color = if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                            contentColor = if (!enabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                else if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, enabled = enabled, role = Role.Button) { sec = s.name },
+                            contentColor = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth().clip(itemShape).selectable(on, role = Role.Button) { sec = s.name },
                         ) {
                             Column(Modifier.heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
                                 Text(title.substringBefore(" · "), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-                                Text(if (enabled) expertSummary(vm, st, s, scenes.size, rules.size)
-                                    else stringResource(R.string.scene_support_note), style = MaterialTheme.typography.bodySmall)
+                                Text(expertSummary(vm, st, s, scenes.size, rules.size), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
                     reset()
                 }
                 when (section) {
-                    ExpertSec.SCENES -> if (scenes.isEmpty()) {
+                    ExpertSec.SCENES -> if (!st.scenesSupported) {
+                        Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
+                            UnsupportedScenes()
+                        }
+                    } else if (scenes.isEmpty()) {
                         // Nothing to list or edit yet: one pane with the switch and the empty state.
                         Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
-                            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                 SceneHeader(vm, st, seen, warning = true)
                                 Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
                                     EmptyState(Icons.Rounded.Layers, stringResource(R.string.no_scene_rows)) {
@@ -193,7 +192,7 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             }
                         }
                     } else {
-                        Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             SceneHeader(vm, st, seen, warning = true)
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 scenes.forEachIndexed { i, r ->
@@ -219,24 +218,22 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                         }
                         Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
                             if (current != null) {
-                                Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) { SceneEditor(vm, st, current, true) }
+                                Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = navBottomPadding() + 24.dp)) { SceneEditor(vm, st, current, true) }
                             }
                         }
                     }
                     ExpertSec.THREADS -> if (rules.isEmpty()) {
                         Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
-                            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                 ExpertWarning()
                                 Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-                                    EmptyState(Icons.Rounded.Memory, stringResource(R.string.no_thread_rules)) {
-                                        AddButton(R.string.add_rule, rules.size < MAX_RULES) { addRule = true }
-                                    }
+                                    EmptyThreadRules { addRule = true }
                                 }
                             }
                         }
                     } else {
                         val sel = selRule.coerceIn(0, (rules.size - 1).coerceAtLeast(0))
-                        Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 rules.forEachIndexed { i, ru ->
                                     val on = i == sel
@@ -257,25 +254,19 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             AddButton(R.string.add_rule, rules.size < MAX_RULES) { addRule = true }
                         }
                         Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
-                            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                 ExpertWarning()
                                 RuleEditor(vm, st, sel, rules, true)
                             }
                         }
                     }
-                    ExpertSec.BOOST -> Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                            ExpertWarning()
-                            Text(stringResource(R.string.boost_behavior), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) { BoostBehavior(vm, st) }
-                        }
-                    }
+
                 }
             }
         } else {
             TopBar(stringResource(R.string.expert_title), subtitle, { nav.pop() })
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                Column(Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = navBottomPadding() + 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Icon(Icons.Rounded.Warning, null, Modifier.padding(top = 2.dp).size(20.dp))
@@ -283,13 +274,19 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                         }
                     }
                     // The scene tab stays selectable: the notice shows only inside it, never on the other tabs.
-                    val tab = ExpertSec.valueOf(sec)
-                    ConnectedChoice(secs.map { it.first to it.second }, tab, { sec = it.name })
+                    val tab = section
+                    ConnectedChoice(
+                        secs.map { it.first to it.second }, tab, { sec = it.name },
+                        shortOf = { s ->
+                            when (s) {
+                                ExpertSec.THREADS -> shortLabelResource(R.string.thread_rules_n_short, rules.size)
+                                ExpertSec.SCENES -> shortLabelResource(R.string.scene_rows_n_short, scenes.size)
+                            }
+                        },
+                    )
                     when (tab) {
                         ExpertSec.SCENES -> if (!st.scenesSupported) {
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                EmptyState(Icons.Rounded.Layers, stringResource(R.string.scene_support_note), Modifier.fillMaxWidth())
-                            }
+                            UnsupportedScenes()
                         } else {
                             SceneHeader(vm, st, seen)
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -317,18 +314,17 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             AddButton(R.string.add_scene, scenes.size < MAX_SCENES) { addScene = true }
                         }
                         ExpertSec.THREADS -> {
+                            CoreLegend(st, Modifier.padding(horizontal = 8.dp))
                             Muted(stringResource(R.string.thread_intro), Modifier.padding(horizontal = 8.dp), MaterialTheme.typography.bodyMedium)
+                            if (rules.isEmpty()) EmptyThreadRules { addRule = true }
                             rules.forEachIndexed { i, _ ->
                                 Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
                                     Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) { RuleEditor(vm, st, i, rules, false) }
                                 }
                             }
-                            Muted(stringResource(R.string.cores_legend, st.limits.goldCores - 1, st.limits.goldCores, st.limits.goldCores + st.limits.primeCores - 1), Modifier.padding(horizontal = 8.dp))
-                            AddButton(R.string.add_rule, rules.size < MAX_RULES) { addRule = true }
+                            if (rules.isNotEmpty()) AddButton(R.string.add_rule, rules.size < MAX_RULES) { addRule = true }
                         }
-                        ExpertSec.BOOST -> TonalCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) { BoostBehavior(vm, st) }
-                        }
+
                     }
                     reset()
                     androidx.compose.foundation.layout.Spacer(Modifier.size(24.dp))
@@ -348,9 +344,28 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
     if (addRule) AddRuleDialog(vm, st, rules, onDismiss = { addRule = false }) { selRule = it }
 }
 
+@Composable
+private fun CoreLegend(st: TuningState, modifier: Modifier = Modifier) {
+    Muted(stringResource(R.string.cores_legend, st.limits.goldCores - 1, st.limits.goldCores, st.limits.goldCores + st.limits.primeCores - 1), modifier)
+}
+
+@Composable
+private fun UnsupportedScenes() {
+    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+        EmptyState(Icons.Rounded.Layers, stringResource(R.string.scene_support_note), Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun EmptyThreadRules(onAdd: () -> Unit) {
+    EmptyState(Icons.Rounded.Memory, stringResource(R.string.no_thread_rules), Modifier.fillMaxWidth()) {
+        AddButton(R.string.add_rule, true, onAdd)
+    }
+}
+
 /** One line that stays inside the first card of a pane. */
 @Composable
-private fun ExpertWarning(modifier: Modifier = Modifier) {
+fun ExpertWarning(modifier: Modifier = Modifier) {
     Surface(modifier, RoundedCornerShape(12.dp), MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Rounded.Warning, null, Modifier.size(16.dp))
@@ -363,7 +378,6 @@ private fun ExpertWarning(modifier: Modifier = Modifier) {
 private fun expertSummary(vm: AppViewModel, st: TuningState, s: ExpertSec, nScenes: Int, nRules: Int): String = when (s) {
     ExpertSec.SCENES -> stringResource(R.string.scene_sum, stringResource(if (st.effective.sceneMode == 1) R.string.on else R.string.off), nScenes)
     ExpertSec.THREADS -> stringResource(R.string.rules_sum, nRules, threadRules(st).count { it.rtPriority >= 90 })
-    ExpertSec.BOOST -> stringResource(R.string.boost_sum, st.effective.boostLengthMs, stringResource(sensLabel(st.effective.dropSensitivity)), vm.tf.delta(st.effective.hysteresisDeciC / 10.0))
 }
 
 private fun sensLabel(v: Int) = when (v) { 1 -> R.string.sensitivity_low; 3 -> R.string.sensitivity_high; else -> R.string.sensitivity_medium }
@@ -637,7 +651,7 @@ private fun RuleEditor(vm: AppViewModel, st: TuningState, index: Int, rules: Lis
             }
         }
         if (pane) CommitName(rule.name) { n -> update(ctx.getString(R.string.saved_rule, n)) { it.name = n } }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(stringResource(R.string.cores_this_thread), style = MaterialTheme.typography.bodyLarge)
             if (pane) Muted(stringResource(R.string.fastest_cores_hint, fastStart, total - 1))
         }
@@ -693,7 +707,7 @@ private fun CoreToggle(core: Int, on: Boolean, fast: Boolean, modifier: Modifier
 }
 
 @Composable
-private fun BoostBehavior(vm: AppViewModel, st: TuningState) {
+fun BoostBehavior(vm: AppViewModel, st: TuningState) {
     val ctx = LocalContext.current
     val e = st.effective
     SliderField(

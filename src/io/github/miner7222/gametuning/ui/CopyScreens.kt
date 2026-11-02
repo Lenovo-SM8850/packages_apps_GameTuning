@@ -117,6 +117,7 @@ private fun CopyBody(vm: AppViewModel, route: Route.Copy, form: CopyForm, wide: 
             listOf(false to stringResource(R.string.keep_both, vm.uniqueName(vm.store.list(pkg, mode), name)), true to stringResource(R.string.replace)),
             replace, { form.setReplace(key, it) },
             Modifier.fillMaxWidth().padding(start = if (wide) 46.dp else 58.dp, end = 16.dp, bottom = 12.dp),
+            shortOf = { keepBoth -> if (keepBoth) null else shortLabelResource(R.string.keep_both_short) },
         )
     }
 
@@ -131,7 +132,11 @@ private fun CopyBody(vm: AppViewModel, route: Route.Copy, form: CopyForm, wide: 
                         val on = m in form.modes && !src
                         FilterChip(
                             selected = on, enabled = !src, onClick = { form.toggleMode(m) },
-                            label = { Text(if (src) stringResource(R.string.this_one, ctx.modeName(m)) else ctx.modeName(m)) },
+                            label = {
+                                val short = modeShortLabel(m)
+                                if (src) FitLabel(stringResource(R.string.this_one, ctx.modeName(m)), short?.let { stringResource(R.string.this_one, it) })
+                                else FitLabel(ctx.modeName(m), short)
+                            },
                             leadingIcon = if (on) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null,
                             modifier = Modifier.heightIn(min = 48.dp),
                         )
@@ -251,7 +256,7 @@ fun CopyScreen(vm: AppViewModel, nav: Nav, route: Route.Copy) {
             }, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.copy)) }
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            Column(Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Column(Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = navBottomPadding() + 8.dp)) {
                 CopyBody(vm, route, form, false)
             }
         }

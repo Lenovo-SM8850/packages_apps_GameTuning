@@ -135,10 +135,10 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         }
 
         if (wide) {
-            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.width(420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     search()
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SectionLabel(stringResource(R.string.your_presets_elsewhere), Modifier.padding(top = 8.dp))
                         mineList()
                         SectionLabel(stringResource(R.string.builtin_settings), Modifier.padding(top = 8.dp))
@@ -153,8 +153,11 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Column(Modifier.widthIn(max = 640.dp).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     search()
-                    ConnectedChoice(listOf(0 to stringResource(R.string.your_presets), 1 to stringResource(R.string.builtin_settings)), tab, { tab = it })
-                    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                    ConnectedChoice(
+                        listOf(0 to stringResource(R.string.your_presets), 1 to stringResource(R.string.builtin_settings)), tab, { tab = it },
+                        shortOf = { shortLabelResource(if (it == 0) R.string.your_presets_short else R.string.builtin_settings_short) },
+                    )
+                    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 16.dp)) {
                         if (tab == 0) mineList() else builtList()
                     }
                 }
@@ -197,6 +200,7 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
             ConnectedChoice(
                 SOURCE_MODES.map { it to (if (it == 4) stringResource(R.string.mode_maximum) else ctx.modeName(it)) }, baseMode, { baseMode = it },
                 if (pane) Modifier.fillMaxWidth() else Modifier.widthIn(max = 640.dp), labelStyle = style,
+                shortOf = { modeShortLabel(it) },
             )
             if (baseMode == 4) Muted(stringResource(R.string.maximum_hint))
         }
@@ -209,6 +213,7 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
             ConnectedChoice(
                 Modes.ALL.map { it to ctx.modeName(it) }, into, { into = it },
                 if (pane) Modifier.fillMaxWidth() else Modifier.widthIn(max = 640.dp), labelStyle = style,
+                shortOf = { modeShortLabel(it) },
             )
         }
     }
@@ -284,7 +289,7 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) { body() }
-            footer(Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 16.dp))
+            footer(Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = navBottomPadding() + 16.dp))
         }
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {

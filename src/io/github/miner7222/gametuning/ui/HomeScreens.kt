@@ -35,7 +35,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ElectricBolt
 import androidx.compose.material.icons.rounded.EnergySavingsLeaf
@@ -82,13 +81,13 @@ import androidx.compose.ui.unit.sp
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.DisplayValues
 import io.github.miner7222.gametuning.data.Freq
+import io.github.miner7222.gametuning.data.GraphicsValues
 import io.github.miner7222.gametuning.data.ModeLibrary
 import io.github.miner7222.gametuning.data.Modes
 import io.github.miner7222.gametuning.data.Preset
 import io.github.miner7222.gametuning.data.Resource
 import io.github.miner7222.gametuning.data.coolRange
 import io.github.miner7222.gametuning.data.builtinName
-import io.github.miner7222.gametuning.data.frameRateName
 import io.github.miner7222.gametuning.data.heatName
 import io.github.miner7222.gametuning.data.ladder
 import io.github.miner7222.gametuning.data.modeName
@@ -146,7 +145,7 @@ fun GameListPane(
 ) {
     val context = LocalContext.current
     val filtered = filterCards(vm.cards, query, filter)
-    LazyColumn(modifier, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    LazyColumn(modifier, contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = navBottomPadding() + if (wide) 32.dp else 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item {
             Column(Modifier.padding(start = 8.dp, top = if (wide) 16.dp else 40.dp, bottom = 16.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (wide) Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium, fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold)
@@ -157,9 +156,12 @@ fun GameListPane(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
                 SearchField(query, onQuery)
                 Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val labels = listOf(R.string.filter_all, R.string.filter_adjusted, R.string.filter_recording)
-                    labels.forEachIndexed { i, r ->
-                        FilterChip(selected = filter == i, onClick = { onFilter(i) }, label = { Text(stringResource(r)) })
+                    val labels = listOf(
+                        R.string.filter_all to 0, R.string.filter_adjusted to R.string.filter_adjusted_short,
+                        R.string.filter_recording to R.string.filter_recording_short,
+                    )
+                    labels.forEachIndexed { i, (r, short) ->
+                        FilterChip(selected = filter == i, onClick = { onFilter(i) }, label = { FitLabel(stringResource(r), shortLabelResource(short)) })
                     }
                 }
             }
@@ -193,7 +195,11 @@ fun GameListPane(
             val intent = remember { vm.games.gameSpaceIntent() }
             if (intent != null) {
                 TextButton(
-                    onClick = { context.startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
+                    // Reuse the library already open in its task instead of stacking another one.
+                    onClick = {
+                        context.startActivity(Intent(intent).addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                    },
                     modifier = Modifier.padding(top = 8.dp).heightIn(min = 48.dp),
                 ) {
                     Icon(Icons.Rounded.OpenInNew, null, Modifier.size(20.dp))
@@ -238,11 +244,13 @@ private fun GameCardRow(
             GameIcon(vm, c.pkg, c.label, if (wide) 48.dp else 56.dp, selected && wide)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(c.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val chip = if (c.mode == Modes.NONE) ctx.modeName(c.mode)
-                        else stringResource(R.string.game_chip, ctx.modeName(c.mode), preset)
-                    if (wide) Muted(chip, style = MaterialTheme.typography.bodySmall)
-                    else Tag(chip, Modifier.weight(1f, fill = false))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Tag(ctx.modeName(c.mode))
+                    if (c.mode != Modes.NONE) {
+                        Text(preset, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                            color = if (wide && selected) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                     if (c.recording && !wide) {
                         Tag(stringResource(R.string.recording_on), container = cs.tertiaryContainer, content = cs.onTertiaryContainer, leadingDot = true)
                     }
@@ -273,7 +281,9 @@ fun ProfilePane(
     val cs = MaterialTheme.colorScheme
     val lib = ps.libs[ps.mode] ?: ModeLibrary(emptyList(), null)
     val current = lib.inUse
-    val hz = ctx.frameRateName(current?.display?.fpsLimit ?: 0)
+    val activeDisplay = current?.display ?: DisplayValues.builtin(ps.mode)
+    val fpsState = if (activeDisplay.fpsLimit > 0) stringResource(R.string.fps_value, activeDisplay.fpsLimit) else stringResource(R.string.no_limit)
+    val graphicsState = stringResource(if (activeDisplay.graphics == GraphicsValues()) R.string.graphics_default else R.string.filter_adjusted)
     var expanded by rememberSaveable { mutableStateOf(false) }
 
     @Composable
@@ -282,6 +292,7 @@ fun ProfilePane(
             GameIcon(vm, pkg, ps.label, if (wide) 56.dp else 64.dp, selected = true)
             Column(Modifier.weight(1f)) {
                 Text(ps.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -310,9 +321,9 @@ fun ProfilePane(
                             Icon(modeIcon(m), if (iconOnly) name else null, Modifier.size(MODE_ICON_SIZE))
                             if (!iconOnly) {
                                 Spacer(Modifier.width(MODE_ICON_GAP))
-                                Text(
-                                    name, style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                FitLabel(
+                                    name, modeShortLabel(m), style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
                                 )
                             }
                         }
@@ -353,8 +364,8 @@ fun ProfilePane(
             if (wide) {
                 Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(stringResource(R.string.preset_in_use_label), style = MaterialTheme.typography.titleSmall, color = cs.primary)
-                        RateTag(hz)
+                        Text(current?.name ?: ctx.builtinName(ps.dedicated), Modifier.weight(1f, fill = false),
+                            style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     TextButton(onClick = { nav.push(Route.Presets(pkg, ps.mode)) }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.manage)) }
                 }
@@ -368,8 +379,9 @@ fun ProfilePane(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Muted(stringResource(R.string.preset_in_use_label))
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(current?.name ?: ctx.builtinName(ps.dedicated), Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            RateTag(hz)
+                            Text(current?.name ?: ctx.builtinName(ps.dedicated), Modifier.weight(1f, fill = false),
+                                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Muted(presetDiff(ps, vm, ps.mode, current), style = MaterialTheme.typography.bodyMedium)
                     }
@@ -419,13 +431,14 @@ fun ProfilePane(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Pair(stringResource(R.string.res_cpu), range(Resource.GOLD)).let { ValueCell(it.first, it.second) }
                         Pair(stringResource(R.string.res_graphics), range(Resource.GPU)).let { ValueCell(it.first, it.second) }
+                        ValueCell(stringResource(R.string.graphics), graphicsState)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         ValueCell(stringResource(R.string.res_fastest), range(Resource.PRIME))
                         ValueCell(stringResource(R.string.heat_limit), ctx.heatName(eff.thermalCase))
+                        ValueCell(stringResource(R.string.fps_limit), fpsState)
                     }
                 }
-                if (!wide) Muted(stringResource(R.string.now_note))
             }
         }
     }
@@ -450,7 +463,6 @@ fun ProfilePane(
             add { h -> NavRow(stringResource(R.string.records_title), recText, { nav.push(Route.Records(pkg)) }, icon = if (wide) null else Icons.Rounded.BarChart, minHeight = h) }
             if (ps.tuningEnabled) {
                 add { h -> NavRow(stringResource(R.string.import_title), null, { nav.push(Route.Import(pkg, ps.mode)) }, icon = if (wide) null else Icons.Rounded.Download, minHeight = h) }
-                add { h -> NavRow(stringResource(R.string.expert_title), stringResource(R.string.expert_sub), { nav.push(Route.Expert(pkg, ps.mode)) }, icon = if (wide) null else Icons.Rounded.Code, minHeight = h) }
             }
         }
         TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(if (wide) 24.dp else 28.dp)) {
@@ -461,23 +473,23 @@ fun ProfilePane(
         }
     }
 
-    /** Stacked detail: the game, with the tuning button at its right. */
+    /** Stacked detail: the game, with the preset list button at its right. */
     @Composable
     fun stackedHeader() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             GameIcon(vm, pkg, ps.label, 48.dp, selected = true)
-            Text(
-                ps.label, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontSize = 22.sp,
-                fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            )
-            if (ps.tuningEnabled) {
-                FilledTonalButton(
-                    onClick = { nav.push(Route.Tuning(pkg, ps.mode)) }, Modifier.height(44.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                ) {
-                    Icon(Icons.Rounded.Tune, null, Modifier.size(18.dp))
-                    Text(stringResource(R.string.edit_tuning), Modifier.padding(start = 8.dp))
-                }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    ps.label, style = MaterialTheme.typography.titleLarge, fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                )
+                Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            FilledTonalButton(
+                onClick = { nav.push(Route.Presets(pkg, ps.mode)) }, Modifier.height(44.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+            ) {
+                Text(stringResource(R.string.manage_presets))
             }
         }
     }
@@ -489,37 +501,40 @@ fun ProfilePane(
         TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(24.dp)) {
             Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.preset_in_use_label), style = MaterialTheme.typography.titleSmall, color = cs.primary)
-                    Surface(Modifier.weight(1f, fill = false), RoundedCornerShape(16.dp), cs.secondaryContainer, cs.onSecondaryContainer) {
-                        Text(
-                            current?.name ?: ctx.builtinName(ps.dedicated), Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    RateTag(hz)
+                    Text(current?.name ?: ctx.builtinName(ps.dedicated), Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                TextButton(onClick = { nav.push(Route.Presets(pkg, ps.mode)) }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.manage)) }
+                if (ps.tuningEnabled) TextButton(onClick = { nav.push(Route.Tuning(pkg, ps.mode)) }, Modifier.heightIn(min = 48.dp)) {
+                    Icon(Icons.Rounded.Tune, null, Modifier.size(18.dp))
+                    Text(stringResource(R.string.edit_tuning), Modifier.padding(start = 8.dp))
+                }
             }
             if (eff != null) {
                 HorizontalDivider(Modifier.padding(horizontal = 20.dp), thickness = 1.dp, color = cs.outlineVariant)
                 Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ValueCell(stringResource(R.string.res_cpu), speedText(ps.limits, eff, Resource.GOLD), Modifier.weight(1f))
-                    ValueCell(stringResource(R.string.res_fastest), speedText(ps.limits, eff, Resource.PRIME), Modifier.weight(1f))
+                    ValueCell(stringResource(R.string.res_fastest), speedText(ps.limits, eff, Resource.PRIME), Modifier.weight(1f), shortLabelResource(R.string.res_fastest_short))
                     ValueCell(stringResource(R.string.res_graphics), speedText(ps.limits, eff, Resource.GPU), Modifier.weight(1f))
-                    ValueCell(stringResource(R.string.heat_limit), ctx.heatName(eff.thermalCase), Modifier.weight(1f))
+                }
+                Row(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ValueCell(
+                        stringResource(R.string.heat_limit), ctx.heatName(eff.thermalCase), Modifier.weight(1f),
+                        shortLabelResource(R.string.heat_limit_short), heatShortLabel(eff.thermalCase),
+                    )
+                    ValueCell(stringResource(R.string.graphics), graphicsState, Modifier.weight(1f))
+                    ValueCell(stringResource(R.string.fps_limit), fpsState, Modifier.weight(1f))
                 }
             }
         }
     }
 
-    /** Stacked detail: records, import and expert settings side by side. */
+    /** Stacked detail: records and import side by side. */
     @Composable
     fun navTiles() {
         val tiles = buildList<Triple<String, String?, () -> Unit>> {
             add(Triple(stringResource(R.string.records_title), recText) { nav.push(Route.Records(pkg)) })
             if (ps.tuningEnabled) {
                 add(Triple(stringResource(R.string.import_title), null) { nav.push(Route.Import(pkg, ps.mode)) })
-                add(Triple(stringResource(R.string.expert_title), null) { nav.push(Route.Expert(pkg, ps.mode)) })
             }
         }
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -545,16 +560,15 @@ fun ProfilePane(
         // A detail pane under 840 dp stacks its parts instead of using two columns.
         val stacked = wide && maxWidth < 840.dp
         if (stacked) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 stackedHeader()
                 modeCards()
                 if (ps.tuningEnabled) presetAndNowCard()
                 notice()
-                GraphicsSection(vm, ps)
                 navTiles()
             }
         } else if (wide) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 header()
                 modeCards()
                 if (!ps.tuningEnabled) {
@@ -566,35 +580,28 @@ fun ProfilePane(
                         nowCard(); notice(); moreRows()
                     }
                 }
-                GraphicsSection(vm, ps)
             }
         } else {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = navBottomPadding() + 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 header()
                 SectionLabel(stringResource(R.string.profile))
                 modeCards()
                 if (ps.tuningEnabled) presetCard()
                 notice()
                 nowCard()
-                GraphicsSection(vm, ps)
                 moreRows()
             }
         }
     }
 }
 
-/** The frame rate next to the preset in use, such as "165Hz". */
 @Composable
-private fun RateTag(text: String) {
-    val cs = MaterialTheme.colorScheme
-    Tag(text, container = cs.surfaceContainerHigh, content = cs.onSurfaceVariant)
-}
-
-@Composable
-private fun ValueCell(label: String, value: String, modifier: Modifier = Modifier) {
+private fun ValueCell(label: String, value: String, modifier: Modifier = Modifier, shortLabel: String? = null, shortValue: String? = null) {
     Column(modifier) {
-        Muted(label, style = MaterialTheme.typography.bodyMedium)
-        Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        if (shortLabel != null) FitLabel(label, shortLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+        else Muted(label, style = MaterialTheme.typography.bodyMedium)
+        if (shortValue != null) FitLabel(value, shortValue, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 2)
+        else Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
     }
 }
 

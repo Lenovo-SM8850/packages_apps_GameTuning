@@ -103,7 +103,18 @@ private fun GoalPicker(goal: Int, onPick: (Int) -> Unit, wide: Boolean) {
     val cs = MaterialTheme.colorScheme
     if (!wide) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ConnectedChoice(GOALS.map { it to goalLabel(it) }, goal, onPick)
+            ConnectedChoice(
+                GOALS.map { it to goalLabel(it) }, goal, onPick,
+                shortOf = {
+                    shortLabelResource(
+                        when (it) {
+                            IGameTuning.GOAL_FRAMES -> R.string.goal_frames_short
+                            IGameTuning.GOAL_EFFICIENCY -> R.string.goal_efficiency_short
+                            else -> R.string.goal_balanced_short
+                        },
+                    )
+                },
+            )
             Muted(goalHint(goal), Modifier.padding(horizontal = 8.dp))
         }
     } else {
@@ -283,8 +294,8 @@ fun SuggestScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Boo
         }
 
         if (wide) {
-            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SectionLabel(stringResource(R.string.goal_title))
                         GoalPicker(goal, { goal = it }, true)
@@ -292,7 +303,7 @@ fun SuggestScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Boo
                     SawCard(saw)
                 }
                 Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
-                    Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(R.string.suggest_dialog_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         candidates()
                     }
@@ -301,7 +312,7 @@ fun SuggestScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Boo
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Column(
-                    Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = navBottomPadding() + 24.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -540,15 +551,15 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
         }
 
         if (wide) {
-            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()).padding(bottom = navBottomPadding() + 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SectionLabel(stringResource(R.string.goal))
                     GoalPicker(goal, { goal = it }, true)
                     SawCard(saw, Modifier.padding(top = 4.dp))
                     Muted(stringResource(R.string.auto_based_on, recordSubtitleShort(ctx, info)), Modifier.padding(horizontal = 8.dp))
                 }
                 Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
-                    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp)) {
+                    Column(Modifier.fillMaxSize().padding(start = 28.dp, top = 24.dp, end = 28.dp, bottom = navBottomPadding() + 24.dp)) {
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             planCard()
                             if (plan != null && plan.lines.isNotEmpty()) whereToApply()
@@ -564,7 +575,7 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Column(
-                    Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = navBottomPadding() + 24.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     GoalPicker(goal, { goal = it }, false)
