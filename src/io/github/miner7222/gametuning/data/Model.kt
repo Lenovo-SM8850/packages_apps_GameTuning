@@ -11,9 +11,11 @@ import vendor.lenovo.hardware.gametuning.ThreadRule
 import java.security.SecureRandom
 
 object Modes {
+    const val NONE = 0
     const val BALANCED = 1
     const val PERFORMANCE = 2
     const val BATTERY = 3
+    /** Modes that support tuning; None must never be used for a tuning configuration. */
     val ALL = intArrayOf(BATTERY, BALANCED, PERFORMANCE)
 }
 

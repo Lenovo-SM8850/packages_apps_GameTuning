@@ -43,6 +43,7 @@
 
     <!-- Profile -->
     <string name="profile">Profile</string>
+    <string name="mode_none">None</string>
     <string name="mode_balanced">Balanced</string>
     <string name="mode_performance">Performance</string>
     <string name="mode_battery">Battery</string>

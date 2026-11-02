@@ -2,7 +2,11 @@
 package io.github.miner7222.gametuning.ui
 
 import android.app.Application
+import android.database.ContentObserver
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -75,12 +79,14 @@ class ProfileState(
     val mode: Int,
     val libs: Map<Int, ModeLibrary>,
     val builtins: Map<Int, PolicyProfile>,
-    val effective: PolicyProfile,
+    val effective: PolicyProfile?,
     val limits: PolicyLimits,
     val recordings: List<RecordingInfo>,
     val armed: Boolean,
     val notice: String?,
-)
+) {
+    val tuningEnabled: Boolean get() = mode != Modes.NONE
+}
 
 /** The preset in use for one profile of one game, with the resolved values the editor needs. */
 class TuningState(
@@ -185,6 +191,23 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     private var profilePkg: String? = null
     private var tuningKey: Pair<String, Int>? = null
 
+    private val gameListObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            if (available == true) reload()
+        }
+    }
+
+    init {
+        app.contentResolver.registerContentObserver(
+            Settings.System.getUriFor(GameLibrary.LIST_KEY), false, gameListObserver, userId,
+        )
+    }
+
+    override fun onCleared() {
+        app.contentResolver.unregisterContentObserver(gameListObserver)
+        super.onCleared()
+    }
+
     private fun say(text: String, undo: (suspend () -> Unit)? = null) {
         _messages.tryEmit(UiMessage(text, undo))
     }
@@ -268,10 +291,12 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val tunings = repo.tunings()
         val armed = repo.armedPackages()
         cards = list.map { g ->
-            val lib = buildLibrary(g.packageName, g.mode, tunings)
+            val enabled = g.mode != Modes.NONE
+            val lib = if (enabled) buildLibrary(g.packageName, g.mode, tunings) else null
             GameCard(
-                g.packageName, g.label, g.mode, lib.inUse?.name,
-                tunings.any { it.packageName == g.packageName && it.enabled }, g.packageName in armed,
+                g.packageName, g.label, g.mode, lib?.inUse?.name,
+                enabled && tunings.any { it.packageName == g.packageName && it.enabled },
+                enabled && g.packageName in armed,
             )
         }
     }
@@ -311,16 +336,22 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val mode = games.currentMode(pkg) ?: Modes.BALANCED
         val tunings = repo.tunings()
         val libs = Modes.ALL.associateWith { buildLibrary(pkg, it, tunings) }
-        val builtins = Modes.ALL.associateWith { repo.profile(pkg, it, false) }
+        val enabled = mode != Modes.NONE
+        val builtins = if (enabled) Modes.ALL.associateWith { repo.profile(pkg, it, false) } else emptyMap()
         val limits = repo.limits()
         val recs = repo.recordings(pkg)
-        val armed = pkg in repo.armedPackages()
-        val effective = repo.profile(pkg, mode, true)
-        val notice = recs.firstOrNull { it.mode == mode }?.let { computeNotice(it, limits) }
+        val armed = enabled && pkg in repo.armedPackages()
+        val effective = if (enabled) repo.profile(pkg, mode, true) else null
+        val notice = if (enabled) recs.firstOrNull { it.mode == mode }?.let { computeNotice(it, limits) }
+            else s(R.string.tuning_off_none)
         if (profilePkg == pkg) profile = ProfileState(pkg, label, mode, libs, builtins, effective, limits, recs, armed, notice)
     }
 
     private suspend fun loadTuningLocked(pkg: String, mode: Int) {
+        if (mode !in Modes.ALL || games.isNoneMode(pkg, userId)) {
+            tuning = null
+            return
+        }
         val tunings = repo.tunings()
         val lib = buildLibrary(pkg, mode, tunings)
         val limits = repo.limits()
@@ -375,6 +406,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun setArmed(pkg: String, armed: Boolean) = launchLocked {
+        requireTuningEnabled(pkg)
         repo.setArmed(pkg, armed)
         reloadLocked()
     }
@@ -622,6 +654,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
 
     /** Copies a preset to several profiles and games. Returns how many copies were added. */
     fun copyPreset(req: CopyRequest) = launchLocked {
+        requireTuningEnabled(req.srcPkg)
         val srcLib = buildLibrary(req.srcPkg, req.srcMode, repo.tunings())
         val src = srcLib.presets.firstOrNull { it.id == req.presetId } ?: return@launchLocked
         val resolvedKey = repo.preview(src.config.deepCopy().also {
@@ -1094,6 +1127,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
 
     companion object {
         fun modeLabelRes(mode: Int) = when (mode) {
+            Modes.NONE -> R.string.mode_none
             Modes.PERFORMANCE -> R.string.mode_performance
             Modes.BATTERY -> R.string.mode_battery
             else -> R.string.mode_balanced

@@ -146,18 +146,19 @@ fun RecordsScreen(vm: AppViewModel, nav: Nav, pkg: String, wide: Boolean, openId
         if (compact) {
             Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
                 Row(
-                    Modifier.heightIn(min = 48.dp).toggleable(ps.armed, role = Role.Switch) { vm.setArmed(pkg, it) }
+                    Modifier.heightIn(min = 48.dp).toggleable(ps.armed, enabled = ps.tuningEnabled, role = Role.Switch) { vm.setArmed(pkg, it) }
                         .padding(start = 16.dp, end = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(stringResource(R.string.rec_arm_title), style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = ps.armed, onCheckedChange = null)
+                    Switch(checked = ps.armed, onCheckedChange = null, enabled = ps.tuningEnabled)
                 }
             }
         } else {
             Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
                 SwitchRow(
                     stringResource(R.string.rec_arm_title), stringResource(R.string.rec_arm_summary), ps.armed, { vm.setArmed(pkg, it) },
+                    enabled = ps.tuningEnabled,
                     minHeight = 88.dp, padding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
                 )
             }
@@ -457,7 +458,7 @@ private fun ResultBody(
     val hit = remember(loaded, target) { loaded?.let { hitPercent(it, target) } }
     val events = remember(loaded) { loaded?.let { deriveAutoEvents(it) }.orEmpty() }
     val label = ctx.presetLabel(info)
-    val advice = !sum.mixed && sum.validSamples >= MIN_SAMPLES_FOR_ADVICE
+    val advice = ps.tuningEnabled && !sum.mixed && sum.validSamples >= MIN_SAMPLES_FOR_ADVICE
 
     // Other presets of the same profile to compare with: the latest usable record of each.
     val others = remember(ps.recordings, info.id) {
@@ -639,7 +640,12 @@ private fun ResultBody(
     @Composable
     fun adviceNote() {
         if (advice) return
-        Muted(stringResource(if (sum.mixed) R.string.rec_mixed else R.string.rec_short), style = MaterialTheme.typography.bodyMedium)
+        val text = when {
+            !ps.tuningEnabled -> R.string.tuning_off_none
+            sum.mixed -> R.string.rec_mixed
+            else -> R.string.rec_short
+        }
+        Muted(stringResource(text), style = MaterialTheme.typography.bodyMedium)
     }
 
     if (wide) {

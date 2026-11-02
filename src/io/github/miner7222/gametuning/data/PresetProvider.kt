@@ -34,8 +34,13 @@ class PresetProvider : ContentProvider() {
         if (uri.pathSegments != listOf(PATH_ACTIVE)) return null
         val pkg = uri.getQueryParameter(PARAM_PACKAGE)?.takeIf { it.isNotEmpty() } ?: return null
         val rawMode = uri.getQueryParameter(PARAM_MODE)?.toIntOrNull() ?: return null
-        val mode = if (rawMode in Modes.ALL.toList()) rawMode else Modes.BALANCED
+        val mode = if (rawMode == Modes.NONE || rawMode in Modes.ALL.toList()) rawMode else Modes.BALANCED
         val ctx = context ?: return null
+        if (mode == Modes.NONE) {
+            return MatrixCursor(arrayOf(COLUMN_MODE_LABEL, COLUMN_PRESET_LABEL), 1).apply {
+                addRow(arrayOf(ctx.modeName(mode), ""))
+            }
+        }
         // At most one outstanding daemon lookup, even if a live Binder call stops answering.
         if (!lookupMutex.tryLock()) return null
         val lookup = lookups.async {

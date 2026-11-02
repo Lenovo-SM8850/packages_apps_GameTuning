@@ -207,7 +207,8 @@ private fun GameCardRow(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(c.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val chip = stringResource(R.string.game_chip, ctx.modeName(c.mode), preset)
+                    val chip = if (c.mode == Modes.NONE) ctx.modeName(c.mode)
+                        else stringResource(R.string.game_chip, ctx.modeName(c.mode), preset)
                     if (wide) Muted(chip, style = MaterialTheme.typography.bodySmall)
                     else Tag(chip, Modifier.weight(1f, fill = false))
                     if (c.recording && !wide) {
@@ -238,7 +239,7 @@ fun ProfilePane(
     }
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
-    val lib = ps.libs[ps.mode]!!
+    val lib = ps.libs[ps.mode] ?: ModeLibrary(emptyList(), null)
     val current = lib.inUse
     var expanded by rememberSaveable { mutableStateOf(false) }
 
@@ -262,7 +263,7 @@ fun ProfilePane(
                     shape = RoundedCornerShape(radius),
                     color = if (on) cs.primary else cs.surfaceContainer,
                     contentColor = if (on) cs.onPrimary else cs.onSurface,
-                    modifier = Modifier.weight(1f).fillMaxSize().selectable(selected = on, role = Role.RadioButton) { vm.setMode(pkg, m) },
+                    modifier = Modifier.weight(1f).fillMaxSize().selectable(selected = on, enabled = ps.tuningEnabled, role = Role.RadioButton) { vm.setMode(pkg, m) },
                 ) {
                     Column(Modifier.padding(if (wide) 14.dp else 16.dp).heightIn(min = if (wide) 88.dp else 104.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(ctx.modeName(m), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -343,7 +344,7 @@ fun ProfilePane(
     @Composable
     fun nowCard() {
         val limits = ps.limits
-        val eff = ps.effective
+        val eff = ps.effective ?: return
         fun range(r: Int): String {
             val ladder = limits.ladder(r)
             if (ladder.isEmpty()) return "-"
@@ -398,12 +399,14 @@ fun ProfilePane(
             else -> countText
         }
         val rows = buildList<@Composable (Dp) -> Unit> {
-            if (!wide) add { h ->
+            if (!wide && ps.tuningEnabled) add { h ->
                 NavRow(stringResource(R.string.tuning_details), null, { nav.push(Route.Tuning(pkg, ps.mode)) }, icon = Icons.Rounded.Tune, minHeight = h)
             }
             add { h -> NavRow(stringResource(R.string.records_title), recText, { nav.push(Route.Records(pkg)) }, icon = if (wide) null else Icons.Rounded.BarChart, minHeight = h) }
-            add { h -> NavRow(stringResource(R.string.import_title), null, { nav.push(Route.Import(pkg, ps.mode)) }, icon = if (wide) null else Icons.Rounded.Download, minHeight = h) }
-            add { h -> NavRow(stringResource(R.string.expert_title), stringResource(R.string.expert_sub), { nav.push(Route.Expert(pkg, ps.mode)) }, icon = if (wide) null else Icons.Rounded.Code, minHeight = h) }
+            if (ps.tuningEnabled) {
+                add { h -> NavRow(stringResource(R.string.import_title), null, { nav.push(Route.Import(pkg, ps.mode)) }, icon = if (wide) null else Icons.Rounded.Download, minHeight = h) }
+                add { h -> NavRow(stringResource(R.string.expert_title), stringResource(R.string.expert_sub), { nav.push(Route.Expert(pkg, ps.mode)) }, icon = if (wide) null else Icons.Rounded.Code, minHeight = h) }
+            }
         }
         TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(if (wide) 24.dp else 28.dp)) {
             rows.forEachIndexed { i, row ->
@@ -417,7 +420,10 @@ fun ProfilePane(
         Column(modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             header()
             modeCards()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            if (!ps.tuningEnabled) {
+                notice()
+                moreRows()
+            } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Box(Modifier.weight(1f)) { presetCard() }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     nowCard(); notice(); moreRows()
@@ -429,7 +435,7 @@ fun ProfilePane(
             header()
             SectionLabel(stringResource(R.string.profile))
             modeCards()
-            presetCard()
+            if (ps.tuningEnabled) presetCard()
             notice()
             nowCard()
             moreRows()

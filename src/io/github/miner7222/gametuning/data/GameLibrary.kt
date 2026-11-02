@@ -38,9 +38,9 @@ class GameLibrary(private val context: Context) {
                 else entry to GameManager.GAME_MODE_STANDARD
             } ?: emptyList()
 
-    /** None is stored as zero, before the UI normalizes unsupported modes to Balanced. */
+    /** None is stored as zero and does not permit tuning. */
     fun isNoneMode(pkg: String, userId: Int = context.userId): Boolean =
-        rawEntries(userId).any { (name, mode) -> name == pkg && mode == 0 }
+        rawEntries(userId).any { (name, mode) -> name == pkg && mode == Modes.NONE }
 
     suspend fun games(): List<GameInfo> = withContext(Dispatchers.IO) {
         rawEntries().mapNotNull { (pkg, mode) ->
@@ -121,7 +121,7 @@ class GameLibrary(private val context: Context) {
         return b
     }
 
-    private fun normalizeMode(mode: Int) = if (mode in Modes.ALL.toList()) mode else Modes.BALANCED
+    private fun normalizeMode(mode: Int) = if (mode == Modes.NONE || mode in Modes.ALL.toList()) mode else Modes.BALANCED
 
     companion object {
         const val LIST_KEY = "gamespace_game_list"

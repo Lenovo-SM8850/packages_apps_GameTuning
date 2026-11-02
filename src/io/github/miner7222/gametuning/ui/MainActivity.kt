@@ -221,7 +221,8 @@ fun AppRoot(vm: AppViewModel, deepLink: String?, onDeepLinkConsumed: () -> Unit)
                     if (top is Route.Profile) LaunchedEffect(top.pkg) { selected = top.pkg }
 
                     Box(Modifier.fillMaxSize()) {
-                        val dialogOver = top is Route.Copy && wide
+                        val dialogOver = top is Route.Copy && wide &&
+                            vm.profile?.takeIf { it.pkg == top.pkg }?.tuningEnabled == true
                         Screen(vm, nav, if (dialogOver) (nav.below ?: Route.Home) else top, wide, wideSelected) { selected = it }
                         if (dialogOver) CopyDialog(vm, nav, top as Route.Copy)
                     }
@@ -248,6 +249,26 @@ fun AppRoot(vm: AppViewModel, deepLink: String?, onDeepLinkConsumed: () -> Unit)
 private fun Screen(
     vm: AppViewModel, nav: Nav, route: Route, wide: Boolean, wideSelected: String?, select: (String) -> Unit,
 ) {
+    val needsTuning = when (route) {
+        is Route.Presets, is Route.Tuning, is Route.Expert, is Route.Steps,
+        is Route.Import, is Route.Copy, is Route.Suggest, is Route.AutoTune -> true
+        else -> false
+    }
+    if (needsTuning) {
+        val pkg = route.packageName!!
+        val ps = vm.profile?.takeIf { it.pkg == pkg }
+        if (ps == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            return
+        }
+        if (!ps.tuningEnabled) {
+            Column(Modifier.fillMaxSize()) {
+                TopBar(title = "", onBack = { nav.pop() })
+                ProfilePane(vm, pkg, wide, nav)
+            }
+            return
+        }
+    }
     val pick: (String) -> Unit = { pkg ->
         select(pkg)
         if (wide) {

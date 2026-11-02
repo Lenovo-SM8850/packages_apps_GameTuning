@@ -105,7 +105,7 @@ private fun CopyBody(vm: AppViewModel, route: Route.Copy, form: CopyForm, wide: 
     val preset = vm.store.get(route.pkg, route.mode, route.presetId)
     val name = preset?.name.orEmpty()
     val gameLabel = vm.games.label(route.pkg)
-    val others = vm.cards.filter { it.pkg != route.pkg }
+    val others = vm.cards.filter { it.pkg != route.pkg && it.mode != Modes.NONE }
 
     fun conflict(pkg: String, mode: Int) = vm.store.list(pkg, mode).any { it.name == name }
 

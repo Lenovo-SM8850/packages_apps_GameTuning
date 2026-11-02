@@ -13,6 +13,7 @@ data class Change(val label: String, val before: String, val after: String)
 
 fun Context.modeName(mode: Int): String = getString(
     when (mode) {
+        Modes.NONE -> R.string.mode_none
         Modes.PERFORMANCE -> R.string.mode_performance
         Modes.BATTERY -> R.string.mode_battery
         else -> R.string.mode_balanced
