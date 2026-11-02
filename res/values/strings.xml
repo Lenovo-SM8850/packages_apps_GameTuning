@@ -43,6 +43,15 @@
     <string name="tip_body">Save one preset for long sessions and another for top speed.</string>
     <string name="dismiss_tip">Dismiss tip</string>
 
+    <!-- Graphics -->
+    <string name="graphics">Graphics</string>
+    <string name="graphics_texture_filtering">Texture filtering</string>
+    <string name="graphics_anisotropic_filtering">Anisotropic filtering</string>
+    <string name="graphics_mipmap_lod_bias">Mipmap LOD bias</string>
+    <string name="graphics_msaa_limit">MSAA limit</string>
+    <string name="graphics_default">Default</string>
+    <string name="graphics_restart_note">Applies the next time the game starts.</string>
+
     <!-- Profile -->
     <string name="profile">Profile</string>
     <string name="mode_none">None</string>

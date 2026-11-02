@@ -32,6 +32,25 @@ fun main(args: Array<String>) {
     check(s.list(pkg, mode).single().id == "original")
     check(s.list(pkg, mode).single().display == DisplayValues(.85f, 90, true))
     check(s.stableConfig(pkg, mode, "original")!!.toBase64() == encoded)
+    check(s.list(pkg, mode).single().display.graphics == GraphicsValues())
+    check(Modes.ALL.all { DisplayValues.builtin(it).graphics == GraphicsValues() })
+    check(GraphicsValues.fromJson(JSONObject().put("msaaLimit", "2")) == GraphicsValues(msaaLimit = "2"))
+    val graphics = GraphicsValues("Fastest", "16.0", "-4.0", "4")
+    check(GraphicsValues.fromJson(graphics.toJson()) == graphics)
+    val options = graphics.toOptions()
+    check(options.textureFiltering == "Fastest" && options.anisotropicFiltering == "16.0" &&
+        options.mipmapLodBias == "-4.0" && options.msaaLimit == "4")
+    var graphicsStore = store(20)
+    val graphicsDisplay = DisplayValues(.85f, 90, true, graphics)
+    graphicsStore.upsert(pkg, mode, Preset("graphics", "Graphics", config.deepCopy(), graphicsDisplay))
+    graphicsStore = store(20)
+    val graphicsPreset = graphicsStore.get(pkg, mode, "graphics")!!
+    check(graphicsPreset.display == graphicsDisplay)
+    graphicsStore.upsert("copy.game", Modes.PERFORMANCE, Preset("copy", graphicsPreset.name,
+        graphicsPreset.config.retarget(20, "copy.game", Modes.PERFORMANCE, "default"), graphicsPreset.display))
+    check(store(20).get("copy.game", Modes.PERFORMANCE, "copy")!!.display.graphics == graphics)
+    graphicsStore.replaceAll(pkg, mode, listOf(Preset("graphics", "Graphics", config, DisplayValues())))
+    check(store(20).get(pkg, mode, "graphics")!!.display.graphics == GraphicsValues())
     val label: (String) -> String = { "Built-in · $it" }
     val a = BuiltinTransition("@builtin/2/0", 2, "A")
     val b = BuiltinTransition("@builtin/3/0", 3, "B")

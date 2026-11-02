@@ -10,6 +10,7 @@ import android.os.ServiceSpecificException
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import vendor.lenovo.hardware.gametuning.GraphicsOptions
 import vendor.lenovo.hardware.gametuning.GameTuningConfig
 import vendor.lenovo.hardware.gametuning.IGameTuning
 import vendor.lenovo.hardware.gametuning.PolicyLimits
@@ -137,6 +138,14 @@ class GameTuningRepository(private val context: Context) {
     suspend fun setTuning(config: GameTuningConfig): GameTuningConfig = call { it.setTuning(config) }
 
     suspend fun clearTuning(pkg: String, mode: Int) = call { it.clearTuning(userId, pkg, mode) }
+
+    suspend fun graphicsOptions(pkg: String): GraphicsOptions? = try {
+        call { if (it.graphicsSupport) it.getGraphicsOptions(pkg) else null }
+    } catch (_: TuningException) {
+        null
+    }
+
+    suspend fun setGraphicsOptions(pkg: String, options: GraphicsOptions) = call { it.setGraphicsOptions(pkg, options) }
 
     suspend fun globals(): TuningGlobals = call { it.globals }
 

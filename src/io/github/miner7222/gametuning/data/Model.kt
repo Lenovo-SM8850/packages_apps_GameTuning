@@ -3,8 +3,10 @@ package io.github.miner7222.gametuning.data
 
 import android.os.Parcel
 import android.util.Base64
+import org.json.JSONObject
 import vendor.lenovo.hardware.gametuning.FrequencyRange
 import vendor.lenovo.hardware.gametuning.GameTuningConfig
+import vendor.lenovo.hardware.gametuning.GraphicsOptions
 import vendor.lenovo.hardware.gametuning.PolicyProfile
 import vendor.lenovo.hardware.gametuning.SceneRow
 import vendor.lenovo.hardware.gametuning.ThreadRule
@@ -45,11 +47,37 @@ fun displayAffectsProbe(beforeFps: Int?, beforeScale: Float, beforeRefresh: Int,
     beforeFps == null || beforeFps != after.fpsLimit || !beforeScale.isFinite() || beforeScale <= 0 ||
         kotlin.math.abs(beforeScale - after.resolution) >= .0001f || beforeRefresh != afterRefresh
 
+data class GraphicsValues(
+    val textureFiltering: String = "",
+    val anisotropicFiltering: String = "",
+    val mipmapLodBias: String = "",
+    val msaaLimit: String = "",
+) {
+    fun toOptions() = GraphicsOptions().also {
+        it.textureFiltering = textureFiltering
+        it.anisotropicFiltering = anisotropicFiltering
+        it.mipmapLodBias = mipmapLodBias
+        it.msaaLimit = msaaLimit
+    }
+
+    fun toJson(): JSONObject = JSONObject()
+        .put("textureFiltering", textureFiltering).put("anisotropicFiltering", anisotropicFiltering)
+        .put("mipmapLodBias", mipmapLodBias).put("msaaLimit", msaaLimit)
+
+    companion object {
+        fun fromJson(json: JSONObject?) = GraphicsValues(
+            json?.optString("textureFiltering").orEmpty(), json?.optString("anisotropicFiltering").orEmpty(),
+            json?.optString("mipmapLodBias").orEmpty(), json?.optString("msaaLimit").orEmpty(),
+        )
+    }
+}
+
 /** App-side values that belong to a preset but are not part of the daemon's tuning. */
 data class DisplayValues(
     val resolution: Float = 1.0f,
     val fpsLimit: Int = 0,
     val lockRefresh: Boolean = false,
+    val graphics: GraphicsValues = GraphicsValues(),
 ) {
     companion object {
         /** What a profile uses when nothing is adjusted. */

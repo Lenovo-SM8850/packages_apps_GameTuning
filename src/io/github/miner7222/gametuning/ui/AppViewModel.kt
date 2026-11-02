@@ -28,6 +28,7 @@ import io.github.miner7222.gametuning.data.RecordExport
 import io.github.miner7222.gametuning.data.ModeLibrary
 import io.github.miner7222.gametuning.data.Modes
 import io.github.miner7222.gametuning.data.Preset
+import io.github.miner7222.gametuning.data.GraphicsValues
 import io.github.miner7222.gametuning.data.PresetStore
 import io.github.miner7222.gametuning.data.Resource
 import io.github.miner7222.gametuning.data.TemperatureFormat
@@ -117,6 +118,7 @@ class TuningState(
     val hasStable: Boolean,
     val globalsLowBattery: Int,
     val scenesSupported: Boolean,
+    val graphicsAvailable: Boolean,
 ) {
     val preset: Preset? get() = library.inUse
     val dedicated: Boolean get() = builtin.profileKey != GENERIC_PROFILE
@@ -238,14 +240,14 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     /** Runs [block] off the main thread, one at a time, and turns daemon errors into a message. */
-    private fun launchLocked(block: suspend () -> Unit) {
+    private fun launchLocked(showBusy: Boolean = true, block: suspend () -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             mutex.withLock {
-                busy = true
+                if (showBusy) busy = true
                 try {
                     handleFailure(block)
                 } finally {
-                    busy = false
+                    if (showBusy) busy = false
                 }
             }
         }
@@ -409,6 +411,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             pkg, mode, games.label(pkg), lib, cfg, display, limits, builtin, base, effective, allow,
             changes, preset != null && store.stableConfig(pkg, mode, preset.id) != null, lowBatteryPct,
             scenesSupported(pkg, repo.recordings(pkg)),
+            tuning?.takeIf { it.pkg == pkg && it.mode == mode }?.graphicsAvailable ?: (repo.graphicsOptions(pkg) != null),
         )
         if (tuningKey == pkg to mode) tuning = st
     }
@@ -425,6 +428,10 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
     fun setMode(pkg: String, mode: Int) = launchLocked {
         requireTuningEnabled(pkg)
         games.setMode(pkg, mode)
+        if (mode in Modes.ALL) {
+            val preset = buildLibrary(pkg, mode, repo.tunings()).inUse
+            applyGraphics(pkg, mode, preset?.display?.graphics ?: GraphicsValues())
+        }
         displayControl.applyRefresh(pkg, mode)
         reloadLocked()
     }
@@ -468,6 +475,11 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
 
     private fun undoFor(vararg snaps: Snap): suspend () -> Unit = { restore(snaps.toList()) }
 
+    private suspend fun applyGraphics(pkg: String, mode: Int, values: GraphicsValues) {
+        if (games.currentMode(pkg) == mode && repo.graphicsOptions(pkg) != null)
+            repo.setGraphicsOptions(pkg, values.toOptions())
+    }
+
     private suspend fun applyDisplay(pkg: String, mode: Int, d: DisplayValues, allow: GameAllowances) {
         requireTuningEnabled(pkg)
         if (displayAffectsProbe(displayControl.readFpsLimit(pkg, mode), displayControl.readResolution(pkg, mode),
@@ -476,6 +488,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val ok = displayControl.applyGameManager(pkg, mode, d, allow)
         displayControl.applyRefresh(pkg, mode)
         if (!ok) say(s(R.string.display_apply_failed))
+        applyGraphics(pkg, mode, d.graphics)
     }
 
     /** Makes [preset] (or the built-in setting when null) the one in use for a profile. */
@@ -596,10 +609,11 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
      */
     fun edit(
         description: String,
+        showBusy: Boolean = true,
         change: (cfg: GameTuningConfig, display: DisplayValues, st: TuningState) -> DisplayValues,
     ) {
         val st = tuning ?: return
-        launchLocked {
+        launchLocked(showBusy) {
             requireTuningEnabled(st.pkg)
             val before = snapshot(st.pkg, st.mode)
             val lib = buildLibrary(st.pkg, st.mode, repo.tunings())
@@ -622,10 +636,12 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             val normalized = repo.setTuning(cfg)
             normalized.ensureArrays()
             store.upsert(st.pkg, st.mode, Preset(id, name, normalized, newDisplay, existing?.archiveOrigin))
-            if (newDisplay != oldDisplay || existing == null) {
+            if (newDisplay.copy(graphics = oldDisplay.graphics) != oldDisplay || existing == null) {
                 applyDisplay(st.pkg, st.mode, newDisplay, st.allow)
+            } else if (newDisplay.graphics != oldDisplay.graphics) {
+                applyGraphics(st.pkg, st.mode, newDisplay.graphics)
             }
-            reloadLocked()
+            if (showBusy) reloadLocked() else loadTuningLocked(st.pkg, st.mode)
             say(s(R.string.saved_to, name, description), undoFor(before))
         }
     }
@@ -660,6 +676,10 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             reloadLocked()
             say(s(R.string.preset_reset), undoFor(before))
         }
+    }
+
+    fun editGraphics(label: Int, change: (GraphicsValues) -> GraphicsValues) {
+        edit(s(label), showBusy = false) { _, display, _ -> display.copy(graphics = change(display.graphics)) }
     }
 
     fun resetGame(pkg: String) = launchLocked {
@@ -1232,6 +1252,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
             if (!displayControl.applyGameManager(pkg, mode, preset.display, games.allowances(pkg), requireFps = fpsChanged))
                 throw TuningException(IGameTuning.ERROR_INVALID, "Display apply failed")
             displayControl.applyRefresh(pkg, mode)
+            applyGraphics(pkg, mode, preset.display.graphics)
             val expectedRefresh = displayControl.refreshTarget(preset.display, true)
             if (fpsChanged && games.currentMode(pkg) == mode && expectedRefresh > 0 &&
                 displayControl.readRefreshRate(pkg) != expectedRefresh)
@@ -1240,6 +1261,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             withContext(NonCancellable) {
                 val failures = restoreIndependently(
+                    { applyGraphics(pkg, mode, displayBefore.graphics) },
                     {
                         val live = repo.tunings().firstOrNull { it.packageName == pkg && it.mode == mode }
                         if (applied != null && live?.toBase64() == applied.toBase64()) {
@@ -1288,6 +1310,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
                                     if (!displayControl.applyGameManager(before.pkg, before.mode, displayBefore.display, games.allowances(before.pkg)))
                                         throw TuningException(IGameTuning.ERROR_INVALID, "Display apply failed")
                                 },
+                                { applyGraphics(before.pkg, before.mode, displayBefore.display.graphics) },
                                 { displayControl.restoreRefresh(before.pkg, displayBefore.refresh, displayBefore.appliedRefresh) },
                                 { store.replaceAll(before.pkg, before.mode, before.presets) },
                             )

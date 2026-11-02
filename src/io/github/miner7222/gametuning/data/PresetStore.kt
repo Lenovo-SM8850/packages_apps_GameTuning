@@ -75,7 +75,7 @@ class PresetStore private constructor(context: Context) {
                                     o.getString("id"), o.getString("name"), config,
                                     DisplayValues(
                                         o.optDouble("res", 1.0).toFloat(), o.optInt("fps", 0),
-                                        o.optBoolean("lock", false),
+                                        o.optBoolean("lock", false), GraphicsValues.fromJson(o.optJSONObject("graphics")),
                                     ),
                                     o.optString("archiveOrigin").takeIf { it.startsWith("@builtin/") },
                                 ),
@@ -127,7 +127,7 @@ class PresetStore private constructor(context: Context) {
                 arr.put(
                     JSONObject().put("id", p.id).put("name", p.name).put("config", p.config.toBase64())
                         .put("res", p.display.resolution.toDouble()).put("fps", p.display.fpsLimit)
-                        .put("lock", p.display.lockRefresh),
+                        .put("lock", p.display.lockRefresh).put("graphics", p.display.graphics.toJson()),
                 )
                 if (p.archiveOrigin != null) arr.getJSONObject(arr.length() - 1).put("archiveOrigin", p.archiveOrigin)
             }

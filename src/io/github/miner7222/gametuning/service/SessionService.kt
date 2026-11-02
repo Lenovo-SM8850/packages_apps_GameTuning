@@ -19,6 +19,7 @@ import android.util.Log
 import android.widget.Toast
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.DisplayValues
+import io.github.miner7222.gametuning.data.Modes
 import io.github.miner7222.gametuning.data.PresetStore
 import io.github.miner7222.gametuning.data.DisplayControl
 import io.github.miner7222.gametuning.data.GameLibrary
@@ -194,6 +195,7 @@ class SessionService : Service() {
             return
         }
         applySessionRefresh(pkg, mode)
+        applySessionGraphics(pkg, mode)
         if (recording) captureRecordingContext(pkg, mode)
         // A profile change inside a session repeats the event; the notice shows once per session.
         if (recording && noticeFor != pkg) {
@@ -221,6 +223,25 @@ class SessionService : Service() {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Could not capture recording context", e)
+        }
+    }
+
+    private fun applySessionGraphics(pkg: String, mode: Int) {
+        if (mode !in Modes.ALL) return
+        try {
+            runBlocking {
+                val repo = GameTuningRepository(this@SessionService)
+                if (repo.graphicsOptions(pkg) == null) return@runBlocking
+                val config = repo.tunings().firstOrNull {
+                    it.packageName == pkg && it.mode == mode && it.enabled
+                }
+                val display = config?.variantId?.let { PresetStore.getInstance(this@SessionService).get(pkg, mode, it)?.display }
+                    ?: DisplayValues.builtin(mode)
+                if (GameLibrary(this@SessionService).currentMode(pkg) == mode)
+                    repo.setGraphicsOptions(pkg, display.graphics.toOptions())
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not apply the session graphics options", e)
         }
     }
 

@@ -550,6 +550,7 @@ fun ProfilePane(
                 modeCards()
                 if (ps.tuningEnabled) presetAndNowCard()
                 notice()
+                GraphicsSection(vm, ps)
                 navTiles()
             }
         } else if (wide) {
@@ -565,6 +566,7 @@ fun ProfilePane(
                         nowCard(); notice(); moreRows()
                     }
                 }
+                GraphicsSection(vm, ps)
             }
         } else {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -574,6 +576,7 @@ fun ProfilePane(
                 if (ps.tuningEnabled) presetCard()
                 notice()
                 nowCard()
+                GraphicsSection(vm, ps)
                 moreRows()
             }
         }
