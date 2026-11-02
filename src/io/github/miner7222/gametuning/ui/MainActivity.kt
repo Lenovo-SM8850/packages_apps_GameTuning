@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -176,7 +177,7 @@ fun AppRoot(vm: AppViewModel, deepLink: String?, onDeepLinkConsumed: () -> Unit)
     val scope = rememberCoroutineScope()
     val undoLabel = stringResource(R.string.undo)
 
-    LaunchedEffect(Unit) { vm.start() }
+    LaunchedEffect(LocalConfiguration.current.locales.toLanguageTags()) { vm.start() }
     LaunchedEffect(Unit) { vm.messages.collect { shown = it } }
     // The stock snackbar host animates with a graphics class this build's UI library lacks, so a
     // plain bar is shown for eight seconds instead.

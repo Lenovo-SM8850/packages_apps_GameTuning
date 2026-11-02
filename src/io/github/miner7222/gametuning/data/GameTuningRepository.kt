@@ -30,7 +30,7 @@ class TuningException(val code: Int, message: String?, cause: Throwable? = null)
 }
 
 /** Wraps the vendor tuning service. Every call runs off the main thread. */
-class GameTuningRepository(context: Context) {
+class GameTuningRepository(private val context: Context) {
     private val userId: Int = context.userId
     @Volatile private var service: IGameTuning? = null
     @Volatile private var limitsCache: PolicyLimits? = null
@@ -89,7 +89,12 @@ class GameTuningRepository(context: Context) {
         return l
     }
 
-    suspend fun profileSources(): List<ProfileSource> = call { it.profileSources }.toList()
+    suspend fun profileSources(): List<ProfileSource> = call { it.profileSources }.map { source ->
+        if (source.profileKey != GENERIC_PROFILE) {
+            source.displayName = GameLibrary(context).label(source.profileKey, source.displayName.orEmpty())
+        }
+        source
+    }
 
     /** Packages that have a built-in profile of their own; every other game uses the generic one. */
     suspend fun dedicatedPackages(): Set<String> {

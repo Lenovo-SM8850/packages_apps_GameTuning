@@ -49,7 +49,7 @@ class GameLibrary(private val context: Context) {
             } catch (_: PackageManager.NameNotFoundException) {
                 return@mapNotNull null
             }
-            GameInfo(pkg, info.loadLabel(packageManager).toString(), normalizeMode(mode))
+            GameInfo(pkg, GameNames.resolve(context, pkg, info.loadLabel(packageManager).toString(), installed = true), normalizeMode(mode))
         }.sortedBy { it.label.lowercase() }
     }
 
@@ -105,10 +105,13 @@ class GameLibrary(private val context: Context) {
         }
     }
 
-    fun label(pkg: String): String = try {
-        packageManager.getApplicationInfo(pkg, 0).loadLabel(packageManager).toString()
-    } catch (_: PackageManager.NameNotFoundException) {
-        pkg
+    fun label(pkg: String, originalName: String = pkg): String {
+        return try {
+            val label = packageManager.getApplicationInfo(pkg, 0).loadLabel(packageManager).toString()
+            GameNames.resolve(context, pkg, label, installed = true)
+        } catch (_: PackageManager.NameNotFoundException) {
+            GameNames.resolve(context, pkg, originalName, installed = false)
+        }
     }
 
     fun gameSpaceIntent(): Intent? = packageManager.getLaunchIntentForPackage(GAME_SPACE)

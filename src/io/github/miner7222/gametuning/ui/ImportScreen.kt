@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -65,7 +66,7 @@ private val SOURCE_MODES = Modes.ALL.toList() + 4
 @Composable
 fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boolean) {
     val ctx = LocalContext.current
-    val sources by produceState<ImportSources?>(null, pkg) {
+    val sources by produceState<ImportSources?>(null, pkg, LocalConfiguration.current.locales.toLanguageTags()) {
         value = withContext(Dispatchers.IO) { try { vm.importSources(pkg) } catch (_: Exception) { ImportSources(emptyList(), emptyList()) } }
     }
     var query by rememberSaveable { mutableStateOf("") }
