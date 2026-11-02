@@ -37,6 +37,7 @@
     <string name="no_games">No games yet</string>
     <string name="no_games_body">Add games in Game Space.</string>
     <string name="no_matches">No games match</string>
+    <string name="show_all_games">Show all</string>
     <string name="tip_title">Keep several presets per profile</string>
     <string name="tip_body">Save one preset for long sessions and another for top speed.</string>
     <string name="dismiss_tip">Dismiss tip</string>
@@ -87,6 +88,7 @@
     <string name="presets_sub">%1$s · %2$d of %3$d in %4$s</string>
     <string name="preset_limit">A profile can hold up to 10 presets.</string>
     <string name="in_use">In use</string>
+    <string name="preset_selected">Selected</string>
     <string name="more_for">More for %1$s</string>
     <string name="no_records_yet">No records yet</string>
     <string name="last_record">Last record: %1$s</string>
@@ -285,6 +287,8 @@
     <string name="steps_use_base">Use the starting point\'s steps</string>
     <string name="saved_steps">%1$d temperature steps</string>
     <string name="saved_steps_cleared">Using the starting point\'s steps</string>
+    <string name="discard_changes_q">Discard changes?</string>
+    <string name="discard">Discard</string>
 
     <!-- Expert -->
     <string name="expert_warning">Can cause stutter or overheating.</string>
@@ -292,8 +296,10 @@
     <string name="saved_expert_reset">Expert settings reset</string>
     <string name="scene_rows">Scene rows</string>
     <string name="scene_rows_n">Scene rows · %1$d</string>
+    <string name="no_scene_rows">No scene rows</string>
     <string name="thread_rules">Thread rules</string>
     <string name="thread_rules_n">Thread rules · %1$d</string>
+    <string name="no_thread_rules">No thread rules</string>
     <string name="boost_behavior">Boost behavior</string>
     <string name="scene_sum">%1$s · %2$d rows</string>
     <string name="rules_sum">%1$d rules · %2$d real-time</string>

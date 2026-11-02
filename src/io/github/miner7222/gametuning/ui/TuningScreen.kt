@@ -30,12 +30,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,7 +50,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.Freq
@@ -94,14 +97,18 @@ fun TuningScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         Box {
             IconButton(onClick = { menu = true }, Modifier.size(48.dp)) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.go_back_stable)) }, enabled = st.hasStable,
-                    onClick = { menu = false; vm.goBackToStable() },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.reset_preset)) }, enabled = st.preset != null,
-                    onClick = { menu = false; confirmPreset = true },
-                )
+                if (st.hasStable) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.go_back_stable)) },
+                        onClick = { menu = false; vm.goBackToStable() },
+                    )
+                }
+                if (st.preset != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.reset_preset)) },
+                        onClick = { menu = false; confirmPreset = true },
+                    )
+                }
                 DropdownMenuItem(text = { Text(stringResource(R.string.reset_game)) }, onClick = { menu = false; confirmGame = true })
             }
         }
@@ -142,7 +149,7 @@ fun TuningScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             Sec.TARGETS -> SecPane(R.string.targets) { TargetsContent(vm, st) }
                             Sec.BOOSTS -> SecPane(R.string.boosts) { BoostsContent(vm, st) }
                             Sec.DISPLAY -> SecPane(R.string.display) { DisplayContent(vm, st) }
-                            Sec.ADVANCED -> SecPane(R.string.advanced) { AdvancedContent(vm, nav, st) }
+                            Sec.ADVANCED -> SecPane(R.string.advanced, gap = 16.dp) { AdvancedContent(vm, nav, st) }
                             Sec.UNSAVED -> SecPane(R.string.low_battery, R.string.not_saved_in_presets) { UnsavedContent(vm, st, true) }
                         }
                     }
@@ -222,8 +229,8 @@ fun TuningScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
 }
 
 @Composable
-private fun SecPane(title: Int, subtitle: Int? = null, content: @Composable () -> Unit) {
-    Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+private fun SecPane(title: Int, subtitle: Int? = null, gap: Dp = 20.dp, content: @Composable () -> Unit) {
+    Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(gap)) {
         Column {
             Text(stringResource(title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             if (subtitle != null) Muted(stringResource(subtitle))
@@ -333,6 +340,7 @@ private fun SpeedContent(vm: AppViewModel, st: TuningState) {
             SpeedRange(
                 label = label, top = ladder.lastIndex, lo = eLo, hi = eHi,
                 valueText = { a, b -> Freq.range(r, ladder[a], ladder[b]) },
+                pointText = { a -> Freq.one(r, ladder[a]) },
                 onCommit = ::commit, onPick = { picker = r },
                 onReset = if (changed) ({
                     vm.edit(ctx.getString(R.string.saved_reset, label)) { cfg, d, _ ->
@@ -398,11 +406,12 @@ private fun TargetsContent(vm: AppViewModel, st: TuningState) {
     val ctx = LocalContext.current
     val skin = st.effective.skinTargetMilliC
     val skinOn = skin >= 0
+    val tempLabel = stringResource(R.string.temp_target)
     SliderField(
-        label = stringResource(R.string.temp_target),
+        label = tempLabel,
         value = (if (skinOn) skin else 41000) / 1000f, range = 35f..48f, steps = 25,
-        format = { if (skinOn) vm.tf.absolute(it.toDouble()) else ctx.getString(R.string.off) },
-        enabled = skinOn,
+        format = { vm.tf.absolute(it.toDouble()) },
+        enabled = skinOn, showValue = skinOn,
         minLabel = vm.tf.absoluteRounded(35.0), maxLabel = vm.tf.absoluteRounded(48.0),
         description = stringResource(R.string.temp_target_desc),
         onCommit = { v ->
@@ -410,31 +419,38 @@ private fun TargetsContent(vm: AppViewModel, st: TuningState) {
             vm.edit(ctx.getString(R.string.saved_temp_target, vm.tf.absoluteMilli(milli))) { cfg, d, _ -> cfg.skinTargetMilliC = milli; d }
         },
         trailing = {
-            FilterChip(selected = !skinOn, modifier = Modifier.heightIn(min = 48.dp), onClick = {
-                vm.edit(ctx.getString(R.string.saved_temp_target, if (skinOn) ctx.getString(R.string.off) else vm.tf.absoluteMilli(41000))) { cfg, d, _ ->
-                    cfg.skinTargetMilliC = if (skinOn) -1 else 41000; d
-                }
-            }, label = { Text(stringResource(R.string.off)) })
+            Switch(
+                checked = skinOn, modifier = Modifier.padding(start = 12.dp).semantics { contentDescription = tempLabel },
+                onCheckedChange = { on ->
+                    vm.edit(ctx.getString(R.string.saved_temp_target, if (on) vm.tf.absoluteMilli(41000) else ctx.getString(R.string.off))) { cfg, d, _ ->
+                        cfg.skinTargetMilliC = if (on) 41000 else -1; d
+                    }
+                },
+            )
         },
     )
     val power = st.effective.powerTargetMw
     val powerOn = power >= 0
+    val powerLabel = stringResource(R.string.power_target)
     SliderField(
-        label = stringResource(R.string.power_target),
+        label = powerLabel,
         value = (if (powerOn) power else 6000) / 1000f, range = 2f..12f, steps = 19,
-        format = { if (powerOn) formatPower((it * 1000).roundToInt()) else ctx.getString(R.string.off) },
-        enabled = powerOn, minLabel = formatPower(2000), maxLabel = formatPower(12000),
+        format = { formatPower((it * 1000).roundToInt()) },
+        enabled = powerOn, showValue = powerOn, minLabel = formatPower(2000), maxLabel = formatPower(12000),
         description = stringResource(R.string.power_target_desc),
         onCommit = { v ->
             val mw = ((v * 2).roundToInt() * 500)
             vm.edit(ctx.getString(R.string.saved_power_target, formatPower(mw))) { cfg, d, _ -> cfg.powerTargetMw = mw; d }
         },
         trailing = {
-            FilterChip(selected = !powerOn, modifier = Modifier.heightIn(min = 48.dp), onClick = {
-                vm.edit(ctx.getString(R.string.saved_power_target, if (powerOn) ctx.getString(R.string.off) else formatPower(6000))) { cfg, d, _ ->
-                    cfg.powerTargetMw = if (powerOn) -1 else 6000; d
-                }
-            }, label = { Text(stringResource(R.string.off)) })
+            Switch(
+                checked = powerOn, modifier = Modifier.padding(start = 12.dp).semantics { contentDescription = powerLabel },
+                onCheckedChange = { on ->
+                    vm.edit(ctx.getString(R.string.saved_power_target, if (on) formatPower(6000) else ctx.getString(R.string.off))) { cfg, d, _ ->
+                        cfg.powerTargetMw = if (on) 6000 else -1; d
+                    }
+                },
+            )
         },
     )
 }
@@ -569,8 +585,25 @@ private fun AdvancedContent(vm: AppViewModel, nav: Nav, st: TuningState) {
 
 @Composable
 private fun UnsavedContent(vm: AppViewModel, st: TuningState, wide: Boolean) {
+    if (wide) {
+        // The switch and the thresholds sit right in the pane.
+        val ctx = LocalContext.current
+        val pct = st.globalsLowBattery
+        TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(24.dp)) {
+            SwitchRow(
+                stringResource(R.string.low_battery), stringResource(R.string.low_battery_desc), pct > 0,
+                { on -> vm.setLowBattery(if (on) 20 else 0) },
+                minHeight = 80.dp, padding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+            )
+            ConnectedChoice(
+                (10..40 step 5).map { it to ctx.getString(R.string.percent, it) }, pct.takeIf { it in 10..40 },
+                { vm.setLowBattery(it) }, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp).fillMaxWidth(), enabled = pct > 0,
+            )
+        }
+        return
+    }
     var picker by remember { mutableStateOf(false) }
-    val pad = if (wide) PaddingValues(horizontal = 20.dp, vertical = 8.dp) else PaddingValues(horizontal = 24.dp, vertical = 8.dp)
+    val pad = PaddingValues(horizontal = 24.dp, vertical = 8.dp)
     val body: @Composable () -> Unit = {
         NavRow(
             stringResource(R.string.low_battery), stringResource(R.string.low_battery_desc), { picker = true },
@@ -578,7 +611,7 @@ private fun UnsavedContent(vm: AppViewModel, st: TuningState, wide: Boolean) {
             padding = pad, minHeight = 80.dp,
         )
     }
-    if (wide) TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(24.dp)) { body() } else body()
+    body()
     if (picker) {
         val ctx = LocalContext.current
         val opts = listOf(0 to ctx.getString(R.string.off)) + (10..50 step 5).map { it to ctx.getString(R.string.below_percent, it) }

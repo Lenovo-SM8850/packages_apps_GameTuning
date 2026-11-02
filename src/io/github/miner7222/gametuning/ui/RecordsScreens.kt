@@ -203,9 +203,14 @@ fun RecordsScreen(vm: AppViewModel, nav: Nav, pkg: String, wide: Boolean, openId
                 Box(Modifier.weight(1f)) {
                     TopBar(stringResource(R.string.records_title), stringResource(R.string.records_sub_wide, ps.label), { nav.pop() })
                 }
-                armSwitch(true)
+                if (all.isNotEmpty()) armSwitch(true)
             }
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            if (all.isEmpty()) {
+                // No record yet: one card in the middle, with the recording switch in it.
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    EmptyState(Icons.Rounded.BarChart, stringResource(R.string.rec_empty)) { armSwitch(true) }
+                }
+            } else Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     chips()
                     list()

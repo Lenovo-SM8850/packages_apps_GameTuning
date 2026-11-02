@@ -23,9 +23,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -279,11 +282,21 @@ private fun Screen(
     }
     when (route) {
         Route.Home, is Route.Profile -> {
+            var query by rememberSaveable { mutableStateOf("") }
+            var filter by rememberSaveable { mutableStateOf(0) }
             if (wide) {
+                // A search or filter with no result leaves no game on the right.
+                val noMatch = vm.cards.isNotEmpty() && filterCards(vm.cards, query, filter).isEmpty()
                 Row(Modifier.fillMaxSize().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    GameListPane(vm, true, wideSelected, pick, Modifier.width(360.dp).fillMaxSize())
+                    GameListPane(vm, true, wideSelected, pick, query, { query = it }, filter, { filter = it }, Modifier.width(360.dp).fillMaxSize())
                     Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
-                        if (wideSelected != null) ProfilePane(vm, wideSelected, true, nav) else Box(Modifier.fillMaxSize())
+                        if (noMatch) {
+                            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                                EmptyState(Icons.Rounded.SearchOff, stringResource(R.string.no_matches)) {
+                                    FilledTonalButton(onClick = { query = ""; filter = 0 }) { Text(stringResource(R.string.show_all_games)) }
+                                }
+                            }
+                        } else if (wideSelected != null) ProfilePane(vm, wideSelected, true, nav) else Box(Modifier.fillMaxSize())
                     }
                 }
             } else if (route is Route.Profile) {
@@ -295,7 +308,7 @@ private fun Screen(
                 }
             } else {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                    GameListPane(vm, false, null, pick, Modifier.widthIn(max = 640.dp).fillMaxSize())
+                    GameListPane(vm, false, null, pick, query, { query = it }, filter, { filter = it }, Modifier.widthIn(max = 640.dp).fillMaxSize())
                 }
             }
         }

@@ -27,8 +27,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -61,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.Freq
 import io.github.miner7222.gametuning.data.KEEP
@@ -124,6 +128,7 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
     var selRule by rememberSaveable { mutableStateOf(0) }
     var sceneSheet by rememberSaveable { mutableStateOf(false) }
     var addScene by rememberSaveable { mutableStateOf(false) }
+    var addRule by rememberSaveable { mutableStateOf(false) }
     val scenes = sceneRows(st)
     val rules = threadRules(st)
     val current = scenes.firstOrNull { it.sceneId == selScene } ?: scenes.firstOrNull()
@@ -149,14 +154,7 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
 
     Column(Modifier.fillMaxSize()) {
         if (wide) {
-            Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { TopBar(stringResource(R.string.expert_title), subtitle, { nav.pop() }) }
-                Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer) {
-                    Row(Modifier.heightIn(min = 40.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Rounded.Warning, null, Modifier.size(18.dp)); Text(stringResource(R.string.expert_warning), style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
+            TopBar(stringResource(R.string.expert_title), subtitle, { nav.pop() }, Modifier.padding(horizontal = 24.dp))
             Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     secs.forEachIndexed { i, (s, title) ->
@@ -176,9 +174,21 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                     reset()
                 }
                 when (section) {
-                    ExpertSec.SCENES -> {
+                    ExpertSec.SCENES -> if (scenes.isEmpty()) {
+                        // Nothing to list or edit yet: one pane with the switch and the empty state.
+                        Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
+                            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                SceneHeader(vm, st, seen, warning = true)
+                                Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                                    EmptyState(Icons.Rounded.Layers, stringResource(R.string.no_scene_rows)) {
+                                        AddButton(R.string.add_scene, scenes.size < MAX_SCENES) { addScene = true }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
                         Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SceneHeader(vm, st, seen)
+                            SceneHeader(vm, st, seen, warning = true)
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 scenes.forEachIndexed { i, r ->
                                     val on = r.sceneId == current?.sceneId
@@ -206,7 +216,18 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             }
                         }
                     }
-                    ExpertSec.THREADS -> {
+                    ExpertSec.THREADS -> if (rules.isEmpty()) {
+                        Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
+                            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                ExpertWarning()
+                                Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                                    EmptyState(Icons.Rounded.Memory, stringResource(R.string.no_thread_rules)) {
+                                        AddButton(R.string.add_rule, rules.size < MAX_RULES) { addRule = true }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
                         val sel = selRule.coerceIn(0, (rules.size - 1).coerceAtLeast(0))
                         Column(Modifier.width(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -225,19 +246,18 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                                     }
                                 }
                             }
-                            AddButton(R.string.add_rule, rules.size < MAX_RULES) {
-                                editThreads(vm, ctx.getString(R.string.saved_rule_added)) { it.add(newRule(st, it)) }
-                                selRule = rules.size
-                            }
+                            AddButton(R.string.add_rule, rules.size < MAX_RULES) { addRule = true }
                         }
                         Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
-                            if (rules.isNotEmpty()) {
-                                Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) { RuleEditor(vm, st, sel, rules, true) }
+                            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                ExpertWarning()
+                                RuleEditor(vm, st, sel, rules, true)
                             }
                         }
                     }
                     ExpertSec.BOOST -> Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
                         Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                            ExpertWarning()
                             Text(stringResource(R.string.boost_behavior), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) { BoostBehavior(vm, st) }
                         }
@@ -290,7 +310,7 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                                 }
                             }
                             Muted(stringResource(R.string.cores_legend, st.limits.goldCores - 1, st.limits.goldCores, st.limits.goldCores + st.limits.primeCores - 1), Modifier.padding(horizontal = 8.dp))
-                            AddButton(R.string.add_rule, rules.size < MAX_RULES) { editThreads(vm, ctx.getString(R.string.saved_rule_added)) { it.add(newRule(st, it)) } }
+                            AddButton(R.string.add_rule, rules.size < MAX_RULES) { addRule = true }
                         }
                         ExpertSec.BOOST -> TonalCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) { BoostBehavior(vm, st) }
@@ -311,6 +331,18 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
         }
     }
     if (addScene) AddSceneDialog(vm, st, scenes, onDismiss = { addScene = false }) { selScene = it }
+    if (addRule) AddRuleDialog(vm, st, rules, onDismiss = { addRule = false }) { selRule = it }
+}
+
+/** One line that stays inside the first card of a pane. */
+@Composable
+private fun ExpertWarning(modifier: Modifier = Modifier) {
+    Surface(modifier, RoundedCornerShape(12.dp), MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Rounded.Warning, null, Modifier.size(16.dp))
+            Text(stringResource(R.string.expert_warning), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }
 
 @Composable
@@ -323,14 +355,17 @@ private fun expertSummary(vm: AppViewModel, st: TuningState, s: ExpertSec, nScen
 private fun sensLabel(v: Int) = when (v) { 1 -> R.string.sensitivity_low; 3 -> R.string.sensitivity_high; else -> R.string.sensitivity_medium }
 
 @Composable
-private fun SceneHeader(vm: AppViewModel, st: TuningState, seen: IntArray?) {
+private fun SceneHeader(vm: AppViewModel, st: TuningState, seen: IntArray?, warning: Boolean = false) {
     val ctx = LocalContext.current
     Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-        SwitchRow(
-            stringResource(R.string.use_scene_settings), stringResource(R.string.use_scene_desc), st.effective.sceneMode == 1,
-            { v -> vm.edit(ctx.getString(R.string.saved_scene_mode, ctx.getString(if (v) R.string.on else R.string.off))) { cfg, d, _ -> cfg.sceneMode = if (v) 1 else 0; d } },
-            minHeight = 64.dp, padding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-        )
+        Column {
+            if (warning) ExpertWarning(Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp))
+            SwitchRow(
+                stringResource(R.string.use_scene_settings), stringResource(R.string.use_scene_desc), st.effective.sceneMode == 1,
+                { v -> vm.edit(ctx.getString(R.string.saved_scene_mode, ctx.getString(if (v) R.string.on else R.string.off))) { cfg, d, _ -> cfg.sceneMode = if (v) 1 else 0; d } },
+                minHeight = 64.dp, padding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+            )
+        }
     }
     if (seen != null && seen.isNotEmpty()) {
         Muted(stringResource(R.string.scenes_seen, seen.take(8).joinToString(" · ")), Modifier.padding(horizontal = 8.dp, vertical = 4.dp), MaterialTheme.typography.bodyMedium)
@@ -390,7 +425,7 @@ private fun AddSceneDialog(vm: AppViewModel, st: TuningState, scenes: List<Scene
             )
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = {
+            TextButton(enabled = valid, colors = disabledReadable(), onClick = {
                 val sid = id!!
                 editScenes(vm, ctx.getString(R.string.saved_scene, sid)) { l ->
                     val row = SceneRow()
@@ -406,6 +441,74 @@ private fun AddSceneDialog(vm: AppViewModel, st: TuningState, scenes: List<Scene
                     l.add(row); l.sortBy { it.sceneId }
                 }
                 onAdded(sid); onDismiss()
+            }) { Text(stringResource(R.string.add)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+/** A text button whose disabled label stays readable on a dialog. */
+@Composable
+private fun disabledReadable() = ButtonDefaults.textButtonColors(
+    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+)
+
+/** Draft of a thread rule: name, cores and real-time priority are chosen before it is saved. */
+@Composable
+private fun AddRuleDialog(vm: AppViewModel, st: TuningState, rules: List<ThreadRule>, onDismiss: () -> Unit, onAdded: (Int) -> Unit) {
+    val ctx = LocalContext.current
+    val seed = remember { newRule(st, rules) }
+    var name by rememberSaveable { mutableStateOf(seed.name) }
+    var mask by rememberSaveable { mutableStateOf(seed.cpuMask) }
+    var rt by rememberSaveable { mutableStateOf(seed.rtPriority) }
+    val total = coreCount(st)
+    val fastStart = total - st.limits.primeCores
+    val rtCount = rules.count { it.rtPriority >= 90 }
+    val valid = name.isNotBlank() && mask != 0L
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.padding(horizontal = 16.dp).widthIn(max = 480.dp).fillMaxWidth(),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        title = { Text(stringResource(R.string.add_rule)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it.take(15) }, singleLine = true,
+                    label = { Text(stringResource(R.string.name)) }, isError = name.isBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(stringResource(R.string.cores_this_thread), style = MaterialTheme.typography.bodyLarge)
+                val columns = total.coerceAtMost(8)
+                for (rowStart in 0 until total step columns) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (c in rowStart until minOf(rowStart + columns, total)) {
+                            CoreToggle(c, (mask shr c) and 1L == 1L, c >= fastStart, Modifier.weight(1f)) {
+                                val next = mask xor (1L shl c)
+                                if (next != 0L) mask = next
+                            }
+                        }
+                    }
+                }
+                val rtOn = rt >= 90
+                SwitchRow(
+                    stringResource(R.string.rt_priority), null, rtOn, { v -> rt = if (v) 90 else -1 },
+                    enabled = rtOn || rtCount < MAX_RT_RULES, minHeight = 56.dp, padding = PaddingValues(0.dp),
+                )
+                if (rtOn) {
+                    SliderField(
+                        stringResource(R.string.priority_value), rt.toFloat(), 90f..99f, 8, { it.roundToInt().toString() },
+                        { v -> rt = v.roundToInt() }, minLabel = "90", maxLabel = "99",
+                    )
+                } else if (rtCount >= MAX_RT_RULES) {
+                    Muted(stringResource(R.string.rt_limit))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, colors = disabledReadable(), onClick = {
+                val rule = ThreadRule().also { it.name = name; it.cpuMask = mask; it.rtPriority = rt }
+                editThreads(vm, ctx.getString(R.string.saved_rule_added)) { it.add(rule) }
+                onAdded(rules.size); onDismiss()
             }) { Text(stringResource(R.string.add)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
@@ -447,7 +550,7 @@ private fun SceneEditor(vm: AppViewModel, st: TuningState, row: SceneRow, pane: 
                 val nr = rangeFromIndices(ladder, a, b)
                 when (res) { Resource.GOLD -> it.gold = nr; Resource.PRIME -> it.prime = nr; else -> it.gpu = nr }
             }
-            SpeedRange(label, ladder.lastIndex, lo, hi, { a, b -> Freq.range(res, ladder[a], ladder[b]) }, ::set, { picker = res }, null, {})
+            SpeedRange(label, ladder.lastIndex, lo, hi, { a, b -> Freq.range(res, ladder[a], ladder[b]) }, { a -> Freq.one(res, ladder[a]) }, ::set, { picker = res }, null, {})
             if (picker == res) {
                 ExactStepDialog(stringResource(R.string.exact_steps_for, label), ladder.map { Freq.one(res, it) }, lo, hi, { a, b -> set(a, b) }, { picker = -1 })
             }

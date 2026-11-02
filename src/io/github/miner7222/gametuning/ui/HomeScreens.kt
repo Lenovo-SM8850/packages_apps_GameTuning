@@ -9,11 +9,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,11 +42,14 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -73,6 +78,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.DisplayValues
 import io.github.miner7222.gametuning.data.Freq
@@ -85,6 +91,8 @@ import io.github.miner7222.gametuning.data.heatName
 import io.github.miner7222.gametuning.data.ladder
 import io.github.miner7222.gametuning.data.modeName
 import io.github.miner7222.gametuning.data.shortSummary
+import vendor.lenovo.hardware.gametuning.PolicyLimits
+import vendor.lenovo.hardware.gametuning.PolicyProfile
 
 /** What a preset row says under its name. */
 @Composable
@@ -102,29 +110,41 @@ fun GameIcon(vm: AppViewModel, pkg: String, label: String, size: Dp, selected: B
     GameAvatar(label, icon, size, selected)
 }
 
+/** One speed range of a profile, such as "0.79–2.00 GHz", or "-" when the device has no such step. */
+fun speedText(limits: PolicyLimits, profile: PolicyProfile, r: Int): String {
+    val ladder = limits.ladder(r)
+    if (ladder.isEmpty()) return "-"
+    val (lo, hi) = profile.coolRange(limits, r)
+    return Freq.range(r, ladder[lo], ladder[hi])
+}
+
+/** The game list after the search text and the filter chip (0 all, 1 adjusted, 2 recording on). */
+fun filterCards(cards: List<GameCard>, query: String, filter: Int): List<GameCard> = cards.filter { c ->
+    c.label.contains(query.trim(), ignoreCase = true) &&
+        when (filter) { 1 -> c.adjusted; 2 -> c.recording; else -> true }
+}
+
 // region game list
 
 @Composable
 fun GameListPane(
-    vm: AppViewModel, wide: Boolean, selectedPkg: String?, onPick: (String) -> Unit, modifier: Modifier = Modifier,
+    vm: AppViewModel, wide: Boolean, selectedPkg: String?, onPick: (String) -> Unit,
+    query: String, onQuery: (String) -> Unit, filter: Int, onFilter: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf(0) }
-    val filtered = vm.cards.filter { c ->
-        c.label.contains(query.trim(), ignoreCase = true) &&
-            when (filter) { 1 -> c.adjusted; 2 -> c.recording; else -> true }
-    }
+    val filtered = filterCards(vm.cards, query, filter)
     LazyColumn(modifier, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item {
             Column(Modifier.padding(start = 8.dp, top = if (wide) 16.dp else 40.dp, bottom = 16.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.app_name), style = if (wide) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                if (wide) Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium, fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold)
+                else Text(stringResource(R.string.app_name), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
             }
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
                 TextField(
-                    value = query, onValueChange = { query = it }, singleLine = true,
+                    value = query, onValueChange = onQuery, singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text(stringResource(R.string.search_games)) },
                     leadingIcon = { Icon(Icons.Rounded.Search, null) },
@@ -138,7 +158,7 @@ fun GameListPane(
                 Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val labels = listOf(R.string.filter_all, R.string.filter_adjusted, R.string.filter_recording)
                     labels.forEachIndexed { i, r ->
-                        FilterChip(selected = filter == i, onClick = { filter = i }, label = { Text(stringResource(r)) })
+                        FilterChip(selected = filter == i, onClick = { onFilter(i) }, label = { Text(stringResource(r)) })
                     }
                 }
             }
@@ -153,7 +173,15 @@ fun GameListPane(
                 }
             }
         } else if (filtered.isEmpty()) {
-            item { Muted(stringResource(R.string.no_matches), Modifier.padding(16.dp), MaterialTheme.typography.bodyMedium) }
+            item {
+                if (wide) {
+                    TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(20.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
+                        Muted(stringResource(R.string.no_matches), Modifier.padding(20.dp), MaterialTheme.typography.bodyMedium)
+                    }
+                } else {
+                    Muted(stringResource(R.string.no_matches), Modifier.padding(16.dp), MaterialTheme.typography.bodyMedium)
+                }
+            }
         }
         itemsIndexed(filtered, key = { _, c -> c.pkg }) { i, c ->
             GameCardRow(vm, c, groupShape(i, filtered.size), wide, c.pkg == selectedPkg) { onPick(c.pkg) }
@@ -254,10 +282,11 @@ fun ProfilePane(
     }
 
     @Composable
-    fun modeCards() {
+    fun modeCards(stacked: Boolean = false) {
         Row(Modifier.selectableGroup().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (m in Modes.ALL) {
                 val on = m == ps.mode
+                val inUsePreset = ps.libs[m]!!.inUse
                 val radius by animateDpAsState(if (on) (if (wide) 28.dp else 32.dp) else (if (wide) 16.dp else 20.dp), label = "radius")
                 Surface(
                     shape = RoundedCornerShape(radius),
@@ -265,15 +294,21 @@ fun ProfilePane(
                     contentColor = if (on) cs.onPrimary else cs.onSurface,
                     modifier = Modifier.weight(1f).fillMaxSize().selectable(selected = on, enabled = ps.tuningEnabled, role = Role.RadioButton) { vm.setMode(pkg, m) },
                 ) {
-                    Column(Modifier.padding(if (wide) 14.dp else 16.dp).heightIn(min = if (wide) 88.dp else 104.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(
+                        Modifier.padding(if (wide) 14.dp else 16.dp).heightIn(min = if (stacked) 56.dp else if (wide) 88.dp else 104.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
                         Text(ctx.modeName(m), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         if (m == Modes.PERFORMANCE) Text(stringResource(R.string.mode_performance_hint), style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.weight(1f))
-                        Tag(
-                            ps.libs[m]!!.inUse?.name ?: stringResource(R.string.builtin_setting),
-                            container = if (on) cs.primaryContainer else cs.surfaceContainerHigh,
-                            content = if (on) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                        )
+                        // On wide screens a badge only shows when a preset of yours is in use.
+                        if (!wide || inUsePreset != null) {
+                            Tag(
+                                inUsePreset?.name ?: stringResource(R.string.builtin_setting),
+                                container = if (on) cs.primaryContainer else cs.surfaceContainerHigh,
+                                content = if (on) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
@@ -390,14 +425,15 @@ fun ProfilePane(
         }
     }
 
+    val recCount = ps.recordings.size
+    val countText = pluralStringResource(R.plurals.records_count, recCount, recCount)
+    val recText = when {
+        ps.armed -> stringResource(if (wide) R.string.recording_on_count else R.string.next_play_count, countText)
+        else -> countText
+    }
+
     @Composable
     fun moreRows() {
-        val recCount = ps.recordings.size
-        val countText = pluralStringResource(R.plurals.records_count, recCount, recCount)
-        val recText = when {
-            ps.armed -> stringResource(if (wide) R.string.recording_on_count else R.string.next_play_count, countText)
-            else -> countText
-        }
         val rows = buildList<@Composable (Dp) -> Unit> {
             if (!wide && ps.tuningEnabled) add { h ->
                 NavRow(stringResource(R.string.tuning_details), null, { nav.push(Route.Tuning(pkg, ps.mode)) }, icon = Icons.Rounded.Tune, minHeight = h)
@@ -416,36 +452,131 @@ fun ProfilePane(
         }
     }
 
-    if (wide) {
-        Column(modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            header()
-            modeCards()
-            if (!ps.tuningEnabled) {
-                notice()
-                moreRows()
-            } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Box(Modifier.weight(1f)) { presetCard() }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    nowCard(); notice(); moreRows()
+    /** Stacked detail: the game, with the tuning button at its right. */
+    @Composable
+    fun stackedHeader() {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            GameIcon(vm, pkg, ps.label, 48.dp, selected = true)
+            Text(
+                ps.label, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontSize = 22.sp,
+                fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            if (ps.tuningEnabled) {
+                FilledTonalButton(
+                    onClick = { nav.push(Route.Tuning(pkg, ps.mode)) }, Modifier.height(44.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                ) {
+                    Icon(Icons.Rounded.Tune, null, Modifier.size(18.dp))
+                    Text(stringResource(R.string.edit_tuning), Modifier.padding(start = 8.dp))
                 }
             }
         }
-    } else {
-        Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            header()
-            SectionLabel(stringResource(R.string.profile))
-            modeCards()
-            if (ps.tuningEnabled) presetCard()
-            notice()
-            nowCard()
-            moreRows()
+    }
+
+    /** Stacked detail: the preset in use and what the game gets now, in one card. */
+    @Composable
+    fun presetAndNowCard() {
+        val eff = ps.effective
+        val fps = current?.display?.fpsLimit ?: 0
+        TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(24.dp)) {
+            Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.preset_in_use_label, ctx.modeName(ps.mode)), style = MaterialTheme.typography.titleSmall, color = cs.primary)
+                    Surface(Modifier.weight(1f, fill = false), RoundedCornerShape(16.dp), cs.secondaryContainer, cs.onSecondaryContainer) {
+                        Text(
+                            current?.name ?: stringResource(R.string.builtin_setting), Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                TextButton(onClick = { nav.push(Route.Presets(pkg, ps.mode)) }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.manage)) }
+            }
+            if (eff != null) {
+                HorizontalDivider(Modifier.padding(horizontal = 20.dp), thickness = 1.dp, color = cs.outlineVariant)
+                Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ValueCell(stringResource(R.string.res_cpu), speedText(ps.limits, eff, Resource.GOLD), Modifier.weight(1f))
+                    ValueCell(stringResource(R.string.res_fastest), speedText(ps.limits, eff, Resource.PRIME), Modifier.weight(1f))
+                    ValueCell(stringResource(R.string.res_graphics), speedText(ps.limits, eff, Resource.GPU), Modifier.weight(1f))
+                    ValueCell(
+                        stringResource(R.string.heat_frame_short),
+                        ctx.heatName(eff.thermalCase) + " · " + if (fps > 0) stringResource(R.string.fps_value, fps) else stringResource(R.string.no_limit),
+                        Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Stacked detail: records, import and expert settings side by side. */
+    @Composable
+    fun navTiles() {
+        val tiles = buildList<Triple<String, String?, () -> Unit>> {
+            add(Triple(stringResource(R.string.records_title), recText) { nav.push(Route.Records(pkg)) })
+            if (ps.tuningEnabled) {
+                add(Triple(stringResource(R.string.import_title), null) { nav.push(Route.Import(pkg, ps.mode)) })
+                add(Triple(stringResource(R.string.expert_title), null) { nav.push(Route.Expert(pkg, ps.mode)) })
+            }
+        }
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            tiles.forEachIndexed { i, (title, sub, open) ->
+                val start = if (i == 0) 20.dp else 8.dp
+                val end = if (i == tiles.lastIndex) 20.dp else 8.dp
+                Surface(
+                    shape = RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end),
+                    color = cs.surfaceContainer,
+                    modifier = Modifier.weight(1f).fillMaxHeight().clickable(onClick = open),
+                ) {
+                    Column(Modifier.heightIn(min = 68.dp).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.Center) {
+                        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        if (sub != null) Muted(sub, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    }
+
+    BoxWithConstraints(modifier) {
+        // A detail pane under 840 dp stacks its parts instead of using two columns.
+        val stacked = wide && maxWidth < 840.dp
+        if (stacked) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                stackedHeader()
+                modeCards(stacked = true)
+                if (ps.tuningEnabled) presetAndNowCard()
+                notice()
+                navTiles()
+            }
+        } else if (wide) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                header()
+                modeCards()
+                if (!ps.tuningEnabled) {
+                    notice()
+                    moreRows()
+                } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    Box(Modifier.weight(1f)) { presetCard() }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        nowCard(); notice(); moreRows()
+                    }
+                }
+            }
+        } else {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                header()
+                SectionLabel(stringResource(R.string.profile))
+                modeCards()
+                if (ps.tuningEnabled) presetCard()
+                notice()
+                nowCard()
+                moreRows()
+            }
         }
     }
 }
 
 @Composable
-private fun ValueCell(label: String, value: String) {
-    Column {
+private fun ValueCell(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
         Muted(label, style = MaterialTheme.typography.bodyMedium)
         Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
     }

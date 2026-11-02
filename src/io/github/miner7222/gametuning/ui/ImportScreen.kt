@@ -142,7 +142,7 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
             Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.width(420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     search()
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SectionLabel(stringResource(R.string.your_presets_elsewhere), Modifier.padding(top = 8.dp))
                         mineList()
                         SectionLabel(stringResource(R.string.builtin_settings), Modifier.padding(top = 8.dp))
@@ -150,11 +150,7 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                     }
                 }
                 Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
-                    if (selected != null) {
-                        Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
-                            ImportDetail(vm, nav, pkg, mode, selected, true)
-                        }
-                    }
+                    if (selected != null) ImportDetail(vm, nav, pkg, mode, selected, true)
                 }
             }
         } else {
@@ -179,7 +175,10 @@ fun ImportScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
     }
 }
 
-/** The preview and options of one import: used in the portrait sheet and the landscape pane. */
+/**
+ * The preview and options of one import: used in the portrait sheet and the landscape pane. In the pane
+ * the starting values and the target profile sit side by side and Cancel and Add stay pinned at the bottom.
+ */
 @Composable
 private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, item: ImportItem, pane: Boolean, onClose: () -> Unit = {}) {
     val ctx = LocalContext.current
@@ -194,22 +193,32 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
         value = null
         value = withContext(Dispatchers.IO) { try { vm.importPreview(item, baseMode) } catch (_: Exception) { emptyList() } }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                if (pane) item.title else stringResource(R.string.use_quoted, item.title),
-                style = if (pane) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+
+    @Composable
+    fun startFromBlock(modifier: Modifier, style: androidx.compose.ui.text.TextStyle) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SectionLabel(stringResource(R.string.start_from_its), Modifier.padding(0.dp))
+            ConnectedChoice(
+                SOURCE_MODES.map { it to (if (it == 4) stringResource(R.string.mode_maximum) else ctx.modeName(it)) }, baseMode, { baseMode = it },
+                if (pane) Modifier.fillMaxWidth() else Modifier.widthIn(max = 640.dp), labelStyle = style,
             )
-            val where = if (item is ImportItem.Mine) stringResource(R.string.from_where, item.subtitle) else stringResource(R.string.builtin_setting)
-            Muted(where, style = MaterialTheme.typography.bodyMedium)
+            if (baseMode == 4) Muted(stringResource(R.string.maximum_hint))
         }
-        if (item is ImportItem.BuiltIn) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SectionLabel(stringResource(R.string.start_from_its), Modifier.padding(0.dp))
-                ConnectedChoice(SOURCE_MODES.map { it to (if (it == 4) stringResource(R.string.mode_maximum) else ctx.modeName(it)) }, baseMode, { baseMode = it }, Modifier.widthIn(max = 640.dp))
-                if (baseMode == 4) Muted(stringResource(R.string.maximum_hint))
-            }
+    }
+
+    @Composable
+    fun intoBlock(modifier: Modifier, style: androidx.compose.ui.text.TextStyle) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SectionLabel(stringResource(R.string.into_profile_label), Modifier.padding(0.dp))
+            ConnectedChoice(
+                Modes.ALL.map { it to ctx.modeName(it) }, into, { into = it },
+                if (pane) Modifier.fillMaxWidth() else Modifier.widthIn(max = 640.dp), labelStyle = style,
+            )
         }
+    }
+
+    @Composable
+    fun changesBlock() {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SectionLabel(stringResource(R.string.what_it_changes), Modifier.padding(0.dp))
             val list = rows
@@ -219,9 +228,33 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
                 list.forEach { Tag(it) }
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SectionLabel(stringResource(R.string.into_profile_label), Modifier.padding(0.dp))
-            ConnectedChoice(Modes.ALL.map { it to ctx.modeName(it) }, into, { into = it }, Modifier.widthIn(max = 640.dp))
+    }
+
+    @Composable
+    fun body() {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                if (pane) item.title else stringResource(R.string.use_quoted, item.title),
+                style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+            )
+            val where = if (item is ImportItem.Mine) stringResource(R.string.from_where, item.subtitle) else stringResource(R.string.builtin_setting)
+            Muted(where, style = MaterialTheme.typography.bodyMedium)
+        }
+        val compact = MaterialTheme.typography.labelMedium
+        if (pane) {
+            if (item is ImportItem.BuiltIn) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    startFromBlock(Modifier.weight(1.4f), compact)
+                    intoBlock(Modifier.weight(1f), compact)
+                }
+            } else {
+                intoBlock(Modifier.fillMaxWidth(), MaterialTheme.typography.labelLarge)
+            }
+            changesBlock()
+        } else {
+            if (item is ImportItem.BuiltIn) startFromBlock(Modifier, MaterialTheme.typography.labelLarge)
+            changesBlock()
+            intoBlock(Modifier, MaterialTheme.typography.labelLarge)
         }
         Column(Modifier.selectableGroup()) {
             SectionLabel(stringResource(R.string.save_as), Modifier.padding(0.dp).padding(bottom = 4.dp))
@@ -233,12 +266,31 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
             stringResource(R.string.also_expert), stringResource(R.string.also_expert_note), expert, { expert = it },
             minHeight = 56.dp, padding = androidx.compose.foundation.layout.PaddingValues(0.dp),
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+    }
+
+    @Composable
+    fun footer(modifier: Modifier) {
+        Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = { if (pane) nav.pop() else onClose() }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
             Button(onClick = {
                 vm.doImport(item, baseMode, pkg, into, replace && canReplace, expert)
                 nav.pop()
             }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.add)) }
+        }
+    }
+
+    if (pane) {
+        Column(Modifier.fillMaxSize()) {
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) { body() }
+            footer(Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 16.dp))
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            body()
+            footer(Modifier)
         }
     }
 }

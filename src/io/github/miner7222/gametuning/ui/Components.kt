@@ -8,6 +8,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -22,10 +23,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSizeIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -36,7 +40,6 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -45,12 +48,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -60,10 +65,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -72,8 +79,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import io.github.miner7222.gametuning.R
+import kotlin.math.roundToInt
 
 /** Corner shape for item [i] of [n] in a grouped list: large outside, small between neighbours. */
 fun groupShape(i: Int, n: Int, big: Dp = 28.dp, small: Dp = 8.dp): Shape =
@@ -109,6 +119,24 @@ fun Muted(text: String, modifier: Modifier = Modifier, style: androidx.compose.u
     Text(text, modifier = modifier, style = style, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
+/** Centered empty state: an icon, a short title and optional actions, on a tonal card. */
+@Composable
+fun EmptyState(
+    icon: ImageVector, title: String, modifier: Modifier = Modifier,
+    actions: @Composable ColumnScope.() -> Unit = {},
+) {
+    TonalCard(modifier.widthIn(max = 420.dp)) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(icon, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            actions()
+        }
+    }
+}
+
 /** The top bar used by every sub screen: back arrow, title, optional subtitle and actions. */
 @Composable
 fun TopBar(
@@ -142,23 +170,31 @@ fun PageTitle(title: String, subtitle: String? = null, modifier: Modifier = Modi
     }
 }
 
-/** Connected button group with one selected button (the selected one becomes a full pill). */
+/**
+ * Connected button group with one selected button: 2 dp apart, 24 dp outer and 6 dp inner corners,
+ * and the selected button becomes a full pill.
+ */
 @Composable
 fun <T> ConnectedChoice(
     options: List<Pair<T, String>>, selected: T?, onSelect: (T) -> Unit,
     modifier: Modifier = Modifier, height: Dp = 48.dp, enabled: Boolean = true,
+    labelStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelLarge,
 ) {
     val cs = MaterialTheme.colorScheme
     Row(
         modifier.selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         options.forEachIndexed { i, (value, label) ->
-            val shapes = when (i) {
-                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-            }
+            val outer = 24.dp
+            val inner = 6.dp
+            val first = i == 0
+            val last = i == options.lastIndex
+            val shape = RoundedCornerShape(
+                topStart = if (first) outer else inner, bottomStart = if (first) outer else inner,
+                topEnd = if (last) outer else inner, bottomEnd = if (last) outer else inner,
+            )
+            val shapes = ToggleButtonShapes(shape = shape, pressedShape = shape, checkedShape = CircleShape)
             ToggleButton(
                 checked = value == selected,
                 onCheckedChange = { onSelect(value) },
@@ -173,7 +209,7 @@ fun <T> ConnectedChoice(
                 ),
                 contentPadding = PaddingValues(horizontal = 2.dp),
             ) {
-                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
+                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = labelStyle)
             }
         }
     }
@@ -228,18 +264,24 @@ fun SliderField(
     format: (Float) -> String, onCommit: (Float) -> Unit,
     modifier: Modifier = Modifier, description: String? = null, minLabel: String? = null,
     maxLabel: String? = null, enabled: Boolean = true, padding: PaddingValues = PaddingValues(0.dp),
-    trailing: @Composable () -> Unit = {},
+    showValue: Boolean = true, trailing: @Composable () -> Unit = {},
 ) {
     var drag by remember(value) { mutableFloatStateOf(value) }
+    // A switched-off slider is one flat track in onSurface at 12 percent.
+    val flat = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     Column(modifier.padding(padding)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-            Text(format(drag), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            if (showValue) Text(format(drag), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             trailing()
         }
         Slider(
             value = drag, onValueChange = { drag = it }, valueRange = range, steps = steps, enabled = enabled,
             onValueChangeFinished = { onCommit(drag) },
+            colors = SliderDefaults.colors(
+                disabledActiveTrackColor = flat, disabledInactiveTrackColor = flat,
+                disabledActiveTickColor = flat, disabledInactiveTickColor = flat,
+            ),
             modifier = Modifier.semantics { contentDescription = label },
         )
         if (minLabel != null || maxLabel != null) {
@@ -252,17 +294,23 @@ fun SliderField(
 }
 
 /**
- * Range slider over a ladder of device speeds. The two handles are ladder indices; the value text
- * opens the exact-step picker and the reset icon puts the row back to the built-in values.
+ * Range slider over a ladder of device speeds. The two handles are ladder indices, each with its own
+ * value under it; the value text opens the exact-step picker and the reset icon puts the row back to
+ * the built-in values.
  */
 @Composable
 fun SpeedRange(
-    label: String, top: Int, lo: Int, hi: Int, valueText: (Int, Int) -> String,
+    label: String, top: Int, lo: Int, hi: Int, valueText: (Int, Int) -> String, pointText: (Int) -> String,
     onCommit: (Int, Int) -> Unit, onPick: () -> Unit, onReset: (() -> Unit)?, note: @Composable () -> Unit,
     modifier: Modifier = Modifier, enabled: Boolean = true,
 ) {
     var dragLo by remember(lo, hi) { mutableFloatStateOf(lo.toFloat()) }
     var dragHi by remember(lo, hi) { mutableFloatStateOf(hi.toFloat()) }
+    val thumbSize = DpSize(20.dp, 20.dp)
+    val trackHeight = 4.dp
+    val startSource = remember { MutableInteractionSource() }
+    val endSource = remember { MutableInteractionSource() }
+    val span = top.toFloat().coerceAtLeast(1f)
     Column(modifier) {
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
@@ -282,12 +330,69 @@ fun SpeedRange(
         RangeSlider(
             value = dragLo..dragHi,
             onValueChange = { dragLo = it.start; dragHi = it.endInclusive },
-            valueRange = 0f..top.toFloat().coerceAtLeast(1f),
-            steps = (top - 1).coerceAtLeast(0),
+            modifier = Modifier.requiredSizeIn(minWidth = thumbSize.width, minHeight = trackHeight),
             enabled = enabled && top > 0,
+            valueRange = 0f..span,
             onValueChangeFinished = { onCommit(dragLo.toInt(), dragHi.toInt()) },
+            startInteractionSource = startSource,
+            endInteractionSource = endSource,
+            startThumb = {
+                SliderDefaults.Thumb(
+                    interactionSource = startSource, enabled = enabled && top > 0,
+                    modifier = Modifier.size(thumbSize).shadow(1.dp, CircleShape, clip = false),
+                )
+            },
+            endThumb = {
+                SliderDefaults.Thumb(
+                    interactionSource = endSource, enabled = enabled && top > 0,
+                    modifier = Modifier.size(thumbSize).shadow(1.dp, CircleShape, clip = false),
+                )
+            },
+            track = {
+                SliderDefaults.Track(
+                    rangeSliderState = it, enabled = enabled && top > 0,
+                    modifier = Modifier.height(trackHeight),
+                    thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp,
+                    drawStopIndicator = null, drawTick = { _, _ -> },
+                )
+            },
+            steps = (top - 1).coerceAtLeast(0),
+        )
+        HandleLabels(dragLo / span, dragHi / span, thumbSize.width / 2, Modifier.padding(bottom = 4.dp),
+            { Muted(pointText(dragLo.toInt())) },
+            { Muted(pointText(dragHi.toInt())) },
         )
         note()
+    }
+}
+
+/** Places [start] and [end] under their slider handles; [inset] is half a handle. */
+@Composable
+private fun HandleLabels(
+    startFraction: Float, endFraction: Float, inset: Dp, modifier: Modifier = Modifier,
+    start: @Composable () -> Unit, end: @Composable () -> Unit,
+) {
+    Layout(content = { Box { start() }; Box { end() } }, modifier = modifier.fillMaxWidth()) { measurables, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val s = measurables[0].measure(loose)
+        val e = measurables[1].measure(loose)
+        val w = constraints.maxWidth
+        val insetPx = inset.roundToPx()
+        val gap = 8.dp.roundToPx()
+        fun center(f: Float) = insetPx + (f.coerceIn(0f, 1f) * (w - 2 * insetPx)).roundToInt()
+        var sx = (center(startFraction) - s.width / 2).coerceIn(0, (w - s.width).coerceAtLeast(0))
+        var ex = (center(endFraction) - e.width / 2).coerceIn(0, (w - e.width).coerceAtLeast(0))
+        if (ex < sx + s.width + gap) {
+            ex = sx + s.width + gap
+            if (ex + e.width > w) {
+                ex = (w - e.width).coerceAtLeast(0)
+                sx = (ex - gap - s.width).coerceAtLeast(0)
+            }
+        }
+        layout(w, maxOf(s.height, e.height)) {
+            s.place(sx, 0)
+            e.place(ex, 0)
+        }
     }
 }
 
@@ -298,11 +403,14 @@ fun ChoiceDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.padding(horizontal = 16.dp).widthIn(max = 340.dp).fillMaxWidth(),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         title = { Text(title) },
         text = {
             Column {
                 if (text != null) Muted(text, Modifier.padding(bottom = 8.dp), MaterialTheme.typography.bodyMedium)
-                LazyColumn(Modifier.heightIn(max = 360.dp).selectableGroup()) {
+                // Eight rows of 48 dp.
+                LazyColumn(Modifier.heightIn(max = 384.dp).selectableGroup()) {
                     itemsIndexed(options) { _, (value, label) ->
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -334,21 +442,30 @@ fun ExactStepDialog(
         text = {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (side in 0..1) {
+                    // Both lists open on the current choice.
+                    val listState = rememberLazyListState(
+                        initialFirstVisibleItemIndex = ((if (side == 0) lo else hi) - 2).coerceIn(0, (labels.size - 1).coerceAtLeast(0)),
+                    )
                     Column(Modifier.weight(1f)) {
                         SectionLabel(stringResource(if (side == 0) R.string.lowest else R.string.highest))
-                        LazyColumn(Modifier.heightIn(max = 320.dp).selectableGroup()) {
+                        LazyColumn(Modifier.heightIn(max = 320.dp).selectableGroup(), state = listState) {
                             itemsIndexed(labels) { index, text ->
                                 val on = if (side == 0) index == newLo else index == newHi
+                                // A highest step below the lowest choice cannot be picked.
+                                val allowed = side == 0 || index >= newLo
                                 Row(
                                     Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                                        .selectable(selected = on, role = Role.RadioButton) {
+                                        .selectable(selected = on, enabled = allowed, role = Role.RadioButton) {
                                             if (side == 0) { newLo = index; if (newHi < index) newHi = index }
-                                            else { newHi = index; if (newLo > index) newLo = index }
+                                            else newHi = index
                                         },
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    RadioButton(selected = on, onClick = null)
-                                    Text(text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
+                                    RadioButton(selected = on, onClick = null, enabled = allowed)
+                                    Text(
+                                        text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium,
+                                        color = if (allowed) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                    )
                                 }
                             }
                         }
@@ -386,9 +503,13 @@ fun Tag(
     container: Color = MaterialTheme.colorScheme.secondaryContainer,
     content: Color = MaterialTheme.colorScheme.onSecondaryContainer,
     leadingDot: Boolean = false,
+    outlined: Boolean = false,
 ) {
+    val outline = MaterialTheme.colorScheme.outline
     Row(
-        modifier.clip(RoundedCornerShape(8.dp)).background(container).padding(horizontal = 10.dp, vertical = 2.dp),
+        modifier.clip(RoundedCornerShape(8.dp)).background(container)
+            .then(if (outlined) Modifier.pillBorder(outline, RoundedCornerShape(8.dp)) else Modifier)
+            .padding(horizontal = 10.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (leadingDot) Box(Modifier.size(8.dp).clip(CircleShape).background(content))

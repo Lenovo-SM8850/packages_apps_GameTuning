@@ -63,15 +63,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.miner7222.gametuning.R
 import io.github.miner7222.gametuning.data.Change
+import io.github.miner7222.gametuning.data.DisplayValues
 import io.github.miner7222.gametuning.data.MAX_PRESETS
 import io.github.miner7222.gametuning.data.Modes
 import io.github.miner7222.gametuning.data.Preset
+import io.github.miner7222.gametuning.data.Resource
 import io.github.miner7222.gametuning.data.formatFloat1
 import io.github.miner7222.gametuning.data.formatPower
+import io.github.miner7222.gametuning.data.heatName
 import io.github.miner7222.gametuning.data.modeName
 import vendor.lenovo.hardware.gametuning.RecordingInfo
 
@@ -92,6 +96,14 @@ private fun recordLine(vm: AppViewModel, rec: RecordingInfo): String {
     if (sum.maxSkinC > 0f) parts.add(vm.tf.absolute(sum.maxSkinC.toDouble()))
     parts.add(if (sum.avgPowerMw >= 0) formatPower(sum.avgPowerMw) else stringResource(R.string.charging))
     return stringResource(R.string.last_record, parts.joinToString(" · "))
+}
+
+/** "In use" on the profile the game runs; "Selected" (outlined) on any other profile. */
+@Composable
+private fun InUseTag(onGameProfile: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    if (onGameProfile) Tag(stringResource(R.string.in_use), container = cs.primary, content = cs.onPrimary)
+    else Tag(stringResource(R.string.preset_selected), container = Color.Transparent, content = cs.onSurfaceVariant, outlined = true)
 }
 
 @Composable
@@ -147,7 +159,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                                     Text(p?.name ?: stringResource(R.string.builtin_setting), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Muted(presetDiff(ps, vm, mode, p))
                                 }
-                                if ((p?.id) == lib.inUseId) Tag(stringResource(R.string.in_use), container = MaterialTheme.colorScheme.primary, content = MaterialTheme.colorScheme.onPrimary)
+                                if ((p?.id) == lib.inUseId) InUseTag(mode == ps.mode)
                             }
                         }
                     }
@@ -188,7 +200,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 Text(p?.name ?: stringResource(R.string.builtin_setting), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                                if (on) Tag(stringResource(R.string.in_use), container = MaterialTheme.colorScheme.primary, content = MaterialTheme.colorScheme.onPrimary)
+                                                if (on) InUseTag(mode == ps.mode)
                                             }
                                             Muted(presetDiff(ps, vm, mode, p), style = MaterialTheme.typography.bodyMedium)
                                             Muted(lastRecordText(vm, ps, mode, p?.id))
@@ -296,7 +308,10 @@ private fun PresetActionsSheet(
         Column(Modifier.padding(bottom = 24.dp)) {
             Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
                 Text(preset?.name ?: stringResource(R.string.builtin_setting), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Muted(ctx.modeName(mode) + if (inUse) " · " + stringResource(R.string.in_use) else "", style = MaterialTheme.typography.bodyMedium)
+                Muted(
+                    ctx.modeName(mode) + if (inUse) " · " + stringResource(if (mode == ps.mode) R.string.in_use else R.string.preset_selected) else "",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
             if (preset != null) {
                 Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -378,9 +393,14 @@ private fun PresetDetail(
                 Text(stringResource(R.string.builtin_setting), Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             }
             if (inUse) {
-                Surface(shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, contentColor = cs.onSurfaceVariant) {
+                val onGameProfile = mode == ps.mode
+                Surface(
+                    shape = RoundedCornerShape(28.dp), color = if (onGameProfile) cs.surfaceContainerHigh else Color.Transparent,
+                    contentColor = cs.onSurfaceVariant, border = if (onGameProfile) null else outlinedPillBorder(),
+                ) {
                     Row(Modifier.height(56.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Rounded.Check, null, Modifier.size(20.dp)); Text(stringResource(R.string.in_use), style = MaterialTheme.typography.labelLarge)
+                        Icon(Icons.Rounded.Check, null, Modifier.size(20.dp))
+                        Text(stringResource(if (onGameProfile) R.string.in_use else R.string.preset_selected), style = MaterialTheme.typography.labelLarge)
                     }
                 }
             } else {
@@ -388,7 +408,12 @@ private fun PresetDetail(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            TonalCard(Modifier.weight(1f), RoundedCornerShape(24.dp)) {
+            if (preset == null) TonalCard(Modifier.weight(1f), RoundedCornerShape(24.dp)) {
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.builtin_setting), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    BuiltinValues(ps, mode)
+                }
+            } else TonalCard(Modifier.weight(1f), RoundedCornerShape(24.dp)) {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
                     Text(stringResource(R.string.changes_from_builtin), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
                     val list = changes
@@ -449,6 +474,33 @@ private fun PresetDetail(
                 TextButton(onClick = { onDelete(preset.id) }, Modifier.heightIn(min = 48.dp)) {
                     Icon(Icons.Rounded.Delete, null, Modifier.size(20.dp), tint = cs.error)
                     Text(stringResource(R.string.delete), Modifier.padding(start = 8.dp), color = cs.error)
+                }
+            }
+        }
+    }
+}
+
+/** What the profile itself gives the game, in two rows of two. */
+@Composable
+private fun BuiltinValues(ps: ProfileState, mode: Int) {
+    val ctx = LocalContext.current
+    val b = ps.builtins[mode] ?: return
+    val fps = DisplayValues.builtin(mode).fpsLimit
+    val heat = ctx.heatName(b.thermalCase) + " · " + if (fps > 0) stringResource(R.string.fps_value, fps) else stringResource(R.string.no_limit)
+    val cells = listOf(
+        stringResource(R.string.res_cpu) to speedText(ps.limits, b, Resource.GOLD),
+        stringResource(R.string.res_fastest) to speedText(ps.limits, b, Resource.PRIME),
+        stringResource(R.string.res_graphics) to speedText(ps.limits, b, Resource.GPU),
+        stringResource(R.string.heat_frame_short) to heat,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        cells.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                pair.forEach { (label, value) ->
+                    Column(Modifier.weight(1f)) {
+                        Muted(label, style = MaterialTheme.typography.bodyMedium)
+                        Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    }
                 }
             }
         }
