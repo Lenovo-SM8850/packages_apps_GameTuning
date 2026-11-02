@@ -75,6 +75,7 @@ import io.github.miner7222.gametuning.data.Preset
 import io.github.miner7222.gametuning.data.Resource
 import io.github.miner7222.gametuning.data.formatFloat1
 import io.github.miner7222.gametuning.data.formatPower
+import io.github.miner7222.gametuning.data.builtinName
 import io.github.miner7222.gametuning.data.heatName
 import io.github.miner7222.gametuning.data.modeName
 import vendor.lenovo.hardware.gametuning.RecordingInfo
@@ -156,7 +157,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                         ) {
                             Row(Modifier.heightIn(min = 80.dp).padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(p?.name ?: stringResource(R.string.builtin_setting), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Text(p?.name ?: ctx.builtinName(ps.dedicated), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Muted(presetDiff(ps, vm, mode, p))
                                 }
                                 if ((p?.id) == lib.inUseId) InUseTag(mode == ps.mode)
@@ -199,7 +200,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                                         RadioButton(selected = on, onClick = null, modifier = Modifier.padding(top = 2.dp))
                                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text(p?.name ?: stringResource(R.string.builtin_setting), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                                Text(p?.name ?: ctx.builtinName(ps.dedicated), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                                 if (on) InUseTag(mode == ps.mode)
                                             }
                                             Muted(presetDiff(ps, vm, mode, p), style = MaterialTheme.typography.bodyMedium)
@@ -207,7 +208,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                                         }
                                     }
                                     IconButton(onClick = { open(p) }, Modifier.padding(top = 12.dp, end = 8.dp).size(48.dp)) {
-                                        Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_for, p?.name ?: stringResource(R.string.builtin_setting)))
+                                        Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_for, p?.name ?: ctx.builtinName(ps.dedicated)))
                                     }
                                 }
                             }
@@ -224,7 +225,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
         }
     }
 
-    if (newSheet) NewPresetSheet(vm, pkg, mode, lib.inUse, wide) { newSheet = false }
+    if (newSheet) NewPresetSheet(vm, pkg, mode, lib.inUse, ps.dedicated, wide) { newSheet = false }
 
     val menuPreset = menuFor?.let { id -> entries.firstOrNull { (it?.id ?: BUILTIN) == id } }
     if (!wide && menuFor != null) {
@@ -251,15 +252,16 @@ private fun NameField(value: String, onChange: (String) -> Unit, modifier: Modif
 }
 
 @Composable
-private fun NewPresetSheet(vm: AppViewModel, pkg: String, mode: Int, inUse: Preset?, wide: Boolean, onClose: () -> Unit) {
+private fun NewPresetSheet(vm: AppViewModel, pkg: String, mode: Int, inUse: Preset?, dedicated: Boolean, wide: Boolean, onClose: () -> Unit) {
     var fromBuiltin by rememberSaveable { mutableStateOf(false) }
-    val builtinName = stringResource(R.string.builtin_setting)
-    val base = if (inUse == null || fromBuiltin) builtinName else inUse.name
+    val ctx = LocalContext.current
+    val builtinSeed = stringResource(R.string.builtin_setting)
+    val base = if (inUse == null || fromBuiltin) builtinSeed else inUse.name
     val suggested = vm.uniqueName(vm.store.list(pkg, mode), stringResource(R.string.name_copy, base))
     var name by rememberSaveable(base) { mutableStateOf(suggested) }
     val options = buildList {
         if (inUse != null) add(false to stringResource(R.string.copy_of_in_use, inUse.name))
-        add(true to if (inUse == null) stringResource(R.string.builtin_in_use) else builtinName)
+        add(true to if (inUse == null) stringResource(R.string.builtin_in_use) else ctx.builtinName(dedicated))
     }
     val body: @Composable () -> Unit = {
         Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -307,7 +309,7 @@ private fun PresetActionsSheet(
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.padding(bottom = 24.dp)) {
             Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-                Text(preset?.name ?: stringResource(R.string.builtin_setting), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(preset?.name ?: ctx.builtinName(ps.dedicated), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Muted(
                     ctx.modeName(mode) + if (inUse) " · " + stringResource(if (mode == ps.mode) R.string.in_use else R.string.preset_selected) else "",
                     style = MaterialTheme.typography.bodyMedium,
@@ -374,6 +376,7 @@ private fun ActionRow(
 private fun PresetDetail(
     vm: AppViewModel, nav: Nav, ps: ProfileState, mode: Int, preset: Preset?, inUseId: String?, onDelete: (String) -> Unit,
 ) {
+    val ctx = LocalContext.current
     val inUse = preset?.id == inUseId
     var name by rememberSaveable(preset?.id) { mutableStateOf(preset?.name.orEmpty()) }
     val changes by produceState<List<Change>?>(null, preset?.id, preset?.config, mode) {
@@ -390,7 +393,7 @@ private fun PresetDetail(
                     vm.renamePreset(ps.pkg, mode, preset.id, name)
                 }
             } else {
-                Text(stringResource(R.string.builtin_setting), Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(ctx.builtinName(ps.dedicated), Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             }
             if (inUse) {
                 val onGameProfile = mode == ps.mode
@@ -410,7 +413,7 @@ private fun PresetDetail(
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (preset == null) TonalCard(Modifier.weight(1f), RoundedCornerShape(24.dp)) {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.builtin_setting), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(ctx.builtinName(ps.dedicated), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     BuiltinValues(ps, mode)
                 }
             } else TonalCard(Modifier.weight(1f), RoundedCornerShape(24.dp)) {

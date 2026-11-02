@@ -62,6 +62,7 @@ import io.github.miner7222.gametuning.data.coolRange
 import io.github.miner7222.gametuning.data.FPS_LIMITS
 import io.github.miner7222.gametuning.data.formatPower
 import io.github.miner7222.gametuning.data.formatScale
+import io.github.miner7222.gametuning.data.builtinName
 import io.github.miner7222.gametuning.data.heatName
 import io.github.miner7222.gametuning.data.ladder
 import io.github.miner7222.gametuning.data.modeName
@@ -86,7 +87,7 @@ fun TuningScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
     var menu by remember { mutableStateOf(false) }
     var confirmGame by remember { mutableStateOf(false) }
     var confirmPreset by remember { mutableStateOf(false) }
-    val presetName = st.preset?.name ?: stringResource(R.string.builtin_setting)
+    val presetName = st.preset?.name ?: ctx.builtinName(st.dedicated)
     val subtitle = stringResource(R.string.tuning_sub, st.label, ctx.modeName(mode), presetName)
     val startsFrom = stringResource(
         if (st.config.baseProfile.isNullOrEmpty()) R.string.starts_from_builtin else R.string.starts_from_other,

@@ -54,7 +54,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.miner7222.gametuning.R
+import io.github.miner7222.gametuning.data.GENERIC_PROFILE
 import io.github.miner7222.gametuning.data.Modes
+import io.github.miner7222.gametuning.data.builtinName
 import io.github.miner7222.gametuning.data.modeName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -237,7 +239,10 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
                 if (pane) item.title else stringResource(R.string.use_quoted, item.title),
                 style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
             )
-            val where = if (item is ImportItem.Mine) stringResource(R.string.from_where, item.subtitle) else stringResource(R.string.builtin_setting)
+            val where = when (item) {
+                is ImportItem.Mine -> stringResource(R.string.from_where, item.subtitle)
+                is ImportItem.BuiltIn -> ctx.builtinName(item.source.profileKey != GENERIC_PROFILE)
+            }
             Muted(where, style = MaterialTheme.typography.bodyMedium)
         }
         val compact = MaterialTheme.typography.labelMedium

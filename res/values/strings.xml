@@ -49,8 +49,9 @@
     <string name="mode_performance">Performance</string>
     <string name="mode_battery">Battery</string>
     <string name="mode_maximum">Maximum</string>
-    <string name="mode_performance_hint">Runs warmer</string>
     <string name="builtin_setting">Built-in setting</string>
+    <string name="builtin_game">Built-in · Game</string>
+    <string name="builtin_generic">Built-in · Generic</string>
     <string name="builtin_diff">Game default, no adjustments</string>
     <string name="diff_none">Game default, no adjustments</string>
     <string name="builtin_in_use">Built-in setting in use</string>
@@ -77,10 +78,10 @@
     <string name="expert_title">Expert settings</string>
     <string name="expert_sub">Scene rows, thread rules, boost behavior</string>
     <string name="notice_lowered_cpu">Last session: CPU top speed was lowered for %1$d min because the device reached %2$s.</string>
-    <string name="notice_lowered_fastest">Last session: fastest core top speed was lowered for %1$d min because the device reached %2$s.</string>
+    <string name="notice_lowered_fastest">Last session: prime core top speed was lowered for %1$d min because the device reached %2$s.</string>
     <string name="notice_lowered_graphics">Last session: GPU top speed was lowered for %1$d min because the device reached %2$s.</string>
     <string name="res_cpu">CPU</string>
-    <string name="res_fastest">Fastest core</string>
+    <string name="res_fastest">Prime core</string>
     <string name="res_graphics">GPU</string>
 
     <!-- Presets -->
@@ -193,10 +194,10 @@
     <string name="change_low">%1$s minimum speed</string>
     <string name="heat_limit">Heat limit</string>
     <string name="heat_hint_wide">Higher limits keep speed longer but run warmer.</string>
-    <string name="heat_keep_cool">Keep cool</string>
+    <string name="heat_keep_cool">Low</string>
     <string name="heat_normal">Normal</string>
-    <string name="heat_warmer">Allow warmer</string>
-    <string name="heat_hottest">Allow hottest</string>
+    <string name="heat_warmer">High</string>
+    <string name="heat_hottest">Max</string>
     <string name="targets">Targets</string>
     <string name="boosts">Boosts</string>
     <string name="display">Display</string>
@@ -327,10 +328,10 @@
     <string name="add_rule">Add rule</string>
     <string name="delete_rule_n">Delete rule %1$s</string>
     <string name="cores_this_thread">Cores this thread may use</string>
-    <string name="fastest_cores_hint">Cores %1$d to %2$d are the fastest.</string>
-    <string name="cores_legend">Cores %2$d to %3$d are the fastest cores; 0 to %1$d are the main CPU cores.</string>
+    <string name="fastest_cores_hint">Cores %1$d to %2$d are prime cores.</string>
+    <string name="cores_legend">Cores %2$d to %3$d are the prime cores; 0 to %1$d are the main CPU cores.</string>
     <string name="core_cd">Core %1$d</string>
-    <string name="core_fastest_cd">Core %1$d, fastest</string>
+    <string name="core_fastest_cd">Core %1$d, prime</string>
     <string name="core_n">Core %1$s</string>
     <string name="cores_n">Cores %1$s</string>
     <string name="rt_priority">Real-time priority</string>

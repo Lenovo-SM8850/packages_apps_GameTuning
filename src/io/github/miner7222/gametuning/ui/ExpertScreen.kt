@@ -77,6 +77,7 @@ import io.github.miner7222.gametuning.data.ladder
 import io.github.miner7222.gametuning.data.lowIndex
 import io.github.miner7222.gametuning.data.coolRange
 import io.github.miner7222.gametuning.data.rangeFromIndices
+import io.github.miner7222.gametuning.data.builtinName
 import io.github.miner7222.gametuning.data.resourceName
 import vendor.lenovo.hardware.gametuning.FrequencyRange
 import vendor.lenovo.hardware.gametuning.SceneRow
@@ -132,7 +133,7 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
     val scenes = sceneRows(st)
     val rules = threadRules(st)
     val current = scenes.firstOrNull { it.sceneId == selScene } ?: scenes.firstOrNull()
-    val presetName = st.preset?.name ?: stringResource(R.string.builtin_setting)
+    val presetName = st.preset?.name ?: ctx.builtinName(st.dedicated)
     val subtitle = stringResource(R.string.tuning_sub, st.label, stringResource(AppViewModel.modeLabelRes(mode)), presetName)
     val section = ExpertSec.valueOf(sec)
     val secs = listOf(

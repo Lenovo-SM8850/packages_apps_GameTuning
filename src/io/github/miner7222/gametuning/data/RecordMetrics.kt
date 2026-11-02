@@ -30,7 +30,7 @@ fun Context.presetLabel(info: RecordingInfo): String {
     return when {
         name.isNotEmpty() -> name
         info.profile?.tuned == true -> getString(R.string.unnamed_preset)
-        else -> getString(R.string.builtin_setting)
+        else -> builtinName(info.profile?.profileKey?.let { it != GENERIC_PROFILE } ?: false)
     }
 }
 
@@ -191,7 +191,7 @@ fun niceAxis(dataMin: Float, dataMax: Float, forceMin: Float? = null): Axis {
     return Axis(lo.toFloat(), hi, ticks)
 }
 
-/** Resource names joined for a sentence: "CPU and fastest core". */
+/** Resource names joined for a sentence: "CPU and prime core". */
 fun Context.joinNames(names: List<String>): String = ListFormatter.getInstance().format(names)
 
 fun fractionOfTop(limits: PolicyLimits, resource: Int, value: Int): Float {

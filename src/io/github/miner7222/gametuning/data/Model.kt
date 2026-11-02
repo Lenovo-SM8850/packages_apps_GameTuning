@@ -20,6 +20,8 @@ object Modes {
 }
 
 const val KEEP = GameTuningConfig.KEEP
+/** Key of the built-in profile that games without one of their own fall back to. */
+const val GENERIC_PROFILE = "default"
 const val MAX_PRESETS = 10
 val FPS_LIMITS = intArrayOf(0, 30, 45, 60, 90, 120, 144, 165)
 

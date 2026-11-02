@@ -34,6 +34,7 @@ class GameTuningRepository(context: Context) {
     private val userId: Int = context.userId
     @Volatile private var service: IGameTuning? = null
     @Volatile private var limitsCache: PolicyLimits? = null
+    @Volatile private var dedicatedCache: Set<String>? = null
 
     /** False when the device does not declare the service. */
     val declared: Boolean = try {
@@ -89,6 +90,15 @@ class GameTuningRepository(context: Context) {
     }
 
     suspend fun profileSources(): List<ProfileSource> = call { it.profileSources }.toList()
+
+    /** Packages that have a built-in profile of their own; every other game uses the generic one. */
+    suspend fun dedicatedPackages(): Set<String> {
+        dedicatedCache?.let { return it }
+        val set = profileSources().filter { it.profileKey != GENERIC_PROFILE }
+            .flatMap { listOf(it.profileKey) + it.packages.orEmpty() }.toSet()
+        dedicatedCache = set
+        return set
+    }
 
     suspend fun profile(pkg: String, mode: Int, tuned: Boolean): PolicyProfile =
         call { it.getProfile(userId, pkg, mode, tuned) }

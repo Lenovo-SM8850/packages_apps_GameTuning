@@ -18,6 +18,7 @@ import io.github.miner7222.gametuning.data.Change
 import io.github.miner7222.gametuning.data.DisplayControl
 import io.github.miner7222.gametuning.data.DisplayValues
 import io.github.miner7222.gametuning.data.GameAllowances
+import io.github.miner7222.gametuning.data.GENERIC_PROFILE
 import io.github.miner7222.gametuning.data.GameLibrary
 import io.github.miner7222.gametuning.data.GameTuningRepository
 import io.github.miner7222.gametuning.data.KEEP
@@ -40,6 +41,7 @@ import io.github.miner7222.gametuning.data.deepCopy
 import io.github.miner7222.gametuning.data.defaultConfig
 import io.github.miner7222.gametuning.data.detailChanges
 import io.github.miner7222.gametuning.data.ensureArrays
+import io.github.miner7222.gametuning.data.builtinName
 import io.github.miner7222.gametuning.data.heatName
 import io.github.miner7222.gametuning.data.ladder
 import io.github.miner7222.gametuning.data.newPresetId
@@ -70,6 +72,8 @@ import vendor.lenovo.hardware.gametuning.TuningProposal
 data class GameCard(
     val pkg: String, val label: String, val mode: Int, val presetName: String?,
     val adjusted: Boolean, val recording: Boolean,
+    /** Whether the built-in preset is the game's own profile rather than the generic one. */
+    val dedicated: Boolean,
 )
 
 /** Everything the profile screen and the preset screens show for one game. */
@@ -84,6 +88,8 @@ class ProfileState(
     val recordings: List<RecordingInfo>,
     val armed: Boolean,
     val notice: String?,
+    /** Whether the built-in preset is the game's own profile rather than the generic one. */
+    val dedicated: Boolean,
 ) {
     val tuningEnabled: Boolean get() = mode != Modes.NONE
 }
@@ -106,6 +112,7 @@ class TuningState(
     val globalsLowBattery: Int,
 ) {
     val preset: Preset? get() = library.inUse
+    val dedicated: Boolean get() = builtin.profileKey != GENERIC_PROFILE
     val builtinDisplay: DisplayValues get() = DisplayValues.builtin(mode)
 }
 
@@ -290,6 +297,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val list = games.games()
         val tunings = repo.tunings()
         val armed = repo.armedPackages()
+        val dedicated = repo.dedicatedPackages()
         cards = list.map { g ->
             val enabled = g.mode != Modes.NONE
             val lib = if (enabled) buildLibrary(g.packageName, g.mode, tunings) else null
@@ -297,6 +305,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
                 g.packageName, g.label, g.mode, lib?.inUse?.name,
                 enabled && tunings.any { it.packageName == g.packageName && it.enabled },
                 enabled && g.packageName in armed,
+                g.packageName in dedicated,
             )
         }
     }
@@ -344,7 +353,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         val effective = if (enabled) repo.profile(pkg, mode, true) else null
         val notice = if (enabled) recs.firstOrNull { it.mode == mode }?.let { computeNotice(it, limits) }
             else s(R.string.tuning_off_none)
-        if (profilePkg == pkg) profile = ProfileState(pkg, label, mode, libs, builtins, effective, limits, recs, armed, notice)
+        if (profilePkg == pkg) profile = ProfileState(pkg, label, mode, libs, builtins, effective, limits, recs, armed, notice, pkg in repo.dedicatedPackages())
     }
 
     private suspend fun loadTuningLocked(pkg: String, mode: Int) {
@@ -476,7 +485,7 @@ class AppViewModel(private val app: Application) : AndroidViewModel(app) {
         activate(pkg, mode, preset)
         reloadLocked()
         say(
-            s(R.string.now_using, preset?.name ?: s(R.string.builtin_setting), s(modeLabelRes(mode))),
+            s(R.string.now_using, preset?.name ?: app.builtinName(pkg in repo.dedicatedPackages()), s(modeLabelRes(mode))),
             undoFor(before),
         )
         andThen?.invoke()

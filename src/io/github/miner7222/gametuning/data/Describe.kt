@@ -28,6 +28,10 @@ fun Context.resourceName(resource: Int): String = getString(
     },
 )
 
+/** The built-in preset: the game's own profile, or the generic one it falls back to. */
+fun Context.builtinName(dedicated: Boolean): String =
+    getString(if (dedicated) R.string.builtin_game else R.string.builtin_generic)
+
 fun Context.heatName(thermalCase: Int): String = getString(
     when {
         thermalCase <= 100 -> R.string.heat_keep_cool
@@ -64,7 +68,7 @@ fun Context.shortSummary(
     if (config.thermalCase != KEEP && config.thermalCase != builtinThermal) {
         parts.add(
             when {
-                config.thermalCase <= 100 -> getString(R.string.heat_keep_cool)
+                config.thermalCase <= 100 -> getString(R.string.heat_limit) + " " + heatName(config.thermalCase)
                 config.thermalCase > builtinThermal -> getString(R.string.diff_heat_higher)
                 else -> getString(R.string.diff_heat_lower)
             },

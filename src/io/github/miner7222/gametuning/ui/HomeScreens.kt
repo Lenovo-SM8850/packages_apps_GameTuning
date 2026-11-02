@@ -37,12 +37,15 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.ElectricBolt
+import androidx.compose.material.icons.rounded.EnergySavingsLeaf
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
+import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,6 +71,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +79,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -87,12 +92,23 @@ import io.github.miner7222.gametuning.data.Modes
 import io.github.miner7222.gametuning.data.Preset
 import io.github.miner7222.gametuning.data.Resource
 import io.github.miner7222.gametuning.data.coolRange
+import io.github.miner7222.gametuning.data.builtinName
 import io.github.miner7222.gametuning.data.heatName
 import io.github.miner7222.gametuning.data.ladder
 import io.github.miner7222.gametuning.data.modeName
 import io.github.miner7222.gametuning.data.shortSummary
 import vendor.lenovo.hardware.gametuning.PolicyLimits
 import vendor.lenovo.hardware.gametuning.PolicyProfile
+
+private val MODE_ICON_SIZE = 18.dp
+private val MODE_ICON_GAP = 8.dp
+
+/** The glyphs Game Space uses for the same three profiles. */
+private fun modeIcon(mode: Int) = when (mode) {
+    Modes.BATTERY -> Icons.Rounded.EnergySavingsLeaf
+    Modes.PERFORMANCE -> Icons.Rounded.ElectricBolt
+    else -> Icons.Rounded.SportsEsports
+}
 
 /** What a preset row says under its name. */
 @Composable
@@ -224,7 +240,7 @@ private fun GameCardRow(
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val container = if (wide) (if (selected) cs.primaryContainer else Color.Transparent) else cs.surfaceContainer
-    val preset = c.presetName ?: stringResource(R.string.builtin_setting)
+    val preset = c.presetName ?: ctx.builtinName(c.dedicated)
     Surface(
         shape = if (wide) RoundedCornerShape(if (selected) 28.dp else 16.dp) else shape, color = container,
         contentColor = if (wide && selected) cs.onPrimaryContainer else cs.onSurface,
@@ -282,32 +298,38 @@ fun ProfilePane(
     }
 
     @Composable
-    fun modeCards(stacked: Boolean = false) {
-        Row(Modifier.selectableGroup().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (m in Modes.ALL) {
-                val on = m == ps.mode
-                val inUsePreset = ps.libs[m]!!.inUse
-                val radius by animateDpAsState(if (on) (if (wide) 28.dp else 32.dp) else (if (wide) 16.dp else 20.dp), label = "radius")
-                Surface(
-                    shape = RoundedCornerShape(radius),
-                    color = if (on) cs.primary else cs.surfaceContainer,
-                    contentColor = if (on) cs.onPrimary else cs.onSurface,
-                    modifier = Modifier.weight(1f).fillMaxSize().selectable(selected = on, enabled = ps.tuningEnabled, role = Role.RadioButton) { vm.setMode(pkg, m) },
-                ) {
-                    Column(
-                        Modifier.padding(if (wide) 14.dp else 16.dp).heightIn(min = if (stacked) 56.dp else if (wide) 88.dp else 104.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+    fun modeCards() {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // Icon and label need a card at least as wide as the longest bold label; otherwise only icons show.
+            val measurer = rememberTextMeasurer()
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val labelStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+            val needed = Modes.ALL.maxOf { with(density) { measurer.measure(ctx.modeName(it), labelStyle, maxLines = 1).size.width.toDp() } } +
+                MODE_ICON_SIZE + MODE_ICON_GAP
+            val iconOnly = (maxWidth - 16.dp) / 3 - 16.dp < needed
+            Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (m in Modes.ALL) {
+                    val on = m == ps.mode
+                    val name = ctx.modeName(m)
+                    val radius by animateDpAsState(if (on) 28.dp else 16.dp, label = "radius")
+                    Surface(
+                        shape = RoundedCornerShape(radius),
+                        color = if (on) cs.primary else cs.surfaceContainer,
+                        contentColor = if (on) cs.onPrimary else cs.onSurface,
+                        modifier = Modifier.weight(1f).selectable(selected = on, enabled = ps.tuningEnabled, role = Role.RadioButton) { vm.setMode(pkg, m) },
                     ) {
-                        Text(ctx.modeName(m), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        if (m == Modes.PERFORMANCE) Text(stringResource(R.string.mode_performance_hint), style = MaterialTheme.typography.bodySmall)
-                        Spacer(Modifier.weight(1f))
-                        // On wide screens a badge only shows when a preset of yours is in use.
-                        if (!wide || inUsePreset != null) {
-                            Tag(
-                                inUsePreset?.name ?: stringResource(R.string.builtin_setting),
-                                container = if (on) cs.primaryContainer else cs.surfaceContainerHigh,
-                                content = if (on) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                            )
+                        Row(
+                            Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 10.dp).alpha(if (ps.tuningEnabled) 1f else 0.38f),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(modeIcon(m), if (iconOnly) name else null, Modifier.size(MODE_ICON_SIZE))
+                            if (!iconOnly) {
+                                Spacer(Modifier.width(MODE_ICON_GAP))
+                                Text(
+                                    name, style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
@@ -330,7 +352,7 @@ fun ProfilePane(
                     Row(Modifier.heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         RadioButton(selected = on, onClick = null)
                         Column(Modifier.weight(1f)) {
-                            Text(p?.name ?: stringResource(R.string.builtin_setting), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                            Text(p?.name ?: ctx.builtinName(ps.dedicated), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                             Muted(presetDiff(ps, vm, ps.mode, p), style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -356,7 +378,7 @@ fun ProfilePane(
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Muted(stringResource(R.string.preset_in_use_label, ctx.modeName(ps.mode)))
-                        Text(current?.name ?: stringResource(R.string.builtin_setting), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(current?.name ?: ctx.builtinName(ps.dedicated), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Muted(presetDiff(ps, vm, ps.mode, current), style = MaterialTheme.typography.bodyMedium)
                     }
                     Surface(shape = RoundedCornerShape(20.dp), color = cs.secondaryContainer, contentColor = cs.onSecondaryContainer) {
@@ -484,7 +506,7 @@ fun ProfilePane(
                     Text(stringResource(R.string.preset_in_use_label, ctx.modeName(ps.mode)), style = MaterialTheme.typography.titleSmall, color = cs.primary)
                     Surface(Modifier.weight(1f, fill = false), RoundedCornerShape(16.dp), cs.secondaryContainer, cs.onSecondaryContainer) {
                         Text(
-                            current?.name ?: stringResource(R.string.builtin_setting), Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            current?.name ?: ctx.builtinName(ps.dedicated), Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                     }
@@ -541,7 +563,7 @@ fun ProfilePane(
         if (stacked) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 stackedHeader()
-                modeCards(stacked = true)
+                modeCards()
                 if (ps.tuningEnabled) presetAndNowCard()
                 notice()
                 navTiles()

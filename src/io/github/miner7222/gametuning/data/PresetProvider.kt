@@ -45,10 +45,16 @@ class PresetProvider : ContentProvider() {
         if (!lookupMutex.tryLock()) return null
         val lookup = lookups.async {
             try {
-                val tuning = GameTuningRepository(ctx).tunings()
+                val repo = GameTuningRepository(ctx)
+                val tuning = repo.tunings()
                     .firstOrNull { it.packageName == pkg && it.mode == mode && it.enabled }
                 if (tuning == null) {
-                    ctx.getString(R.string.builtin_setting)
+                    val dedicated = try {
+                        pkg in repo.dedicatedPackages()
+                    } catch (e: TuningException) {
+                        null
+                    }
+                    if (dedicated == null) ctx.getString(R.string.builtin_setting) else ctx.builtinName(dedicated)
                 } else {
                     val id = tuning.variantId.orEmpty()
                     tuning.variantName.orEmpty().ifEmpty {
