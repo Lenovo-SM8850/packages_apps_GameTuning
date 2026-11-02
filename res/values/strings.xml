@@ -78,10 +78,10 @@
     <string name="expert_sub">Scene rows, thread rules, boost behavior</string>
     <string name="notice_lowered_cpu">Last session: CPU top speed was lowered for %1$d min because the device reached %2$s.</string>
     <string name="notice_lowered_fastest">Last session: fastest core top speed was lowered for %1$d min because the device reached %2$s.</string>
-    <string name="notice_lowered_graphics">Last session: graphics top speed was lowered for %1$d min because the device reached %2$s.</string>
+    <string name="notice_lowered_graphics">Last session: GPU top speed was lowered for %1$d min because the device reached %2$s.</string>
     <string name="res_cpu">CPU</string>
     <string name="res_fastest">Fastest core</string>
-    <string name="res_graphics">Graphics</string>
+    <string name="res_graphics">GPU</string>
 
     <!-- Presets -->
     <string name="presets_title">Presets</string>
@@ -137,7 +137,7 @@
     <string name="diff_hold">Hold strength</string>
     <string name="diff_stutter">Stutter boost</string>
     <string name="diff_cores">All cores awake</string>
-    <string name="diff_gpu_idle">Graphics idle speed</string>
+    <string name="diff_gpu_idle">GPU idle speed</string>
     <string name="diff_wait">Wait after launch</string>
     <string name="diff_expert">Expert settings</string>
     <string name="diff_fps">%1$d fps limit</string>
@@ -228,8 +228,8 @@
     <string name="lock_refresh_desc">Always uses the highest refresh rate</string>
     <string name="cores_awake">Keep all cores awake</string>
     <string name="cores_desc">Helps heavy scenes, uses more battery.</string>
-    <string name="gpu_idle">Graphics idle speed</string>
-    <string name="gpu_idle_desc">Starting graphics speed</string>
+    <string name="gpu_idle">GPU idle speed</string>
+    <string name="gpu_idle_desc">Starting GPU speed</string>
     <string name="wait_after_launch">Wait after launch</string>
     <string name="wait_desc">Raise if loading is unstable.</string>
     <string name="thread_placement">Game thread placement</string>
@@ -271,7 +271,7 @@
     <string name="saved_fps">Frame rate limit: %1$s</string>
     <string name="saved_lock">Lock refresh rate: %1$s</string>
     <string name="saved_cores">Keep all cores awake: %1$s</string>
-    <string name="saved_gpu_idle">Graphics idle speed: %1$s</string>
+    <string name="saved_gpu_idle">GPU idle speed: %1$s</string>
     <string name="saved_wait">Wait after launch %1$d s</string>
     <string name="saved_threads">Game thread placement</string>
 
@@ -447,10 +447,10 @@
     <string name="chart_target_legend">Dashed = %1$d fps target</string>
     <string name="chart_target_legend_varies">Dashed = fps target</string>
     <string name="chart_speed_desc">Speed chart.</string>
-    <string name="chart_graphics_pct">Graphics (percent of max)</string>
+    <string name="chart_graphics_pct">GPU (percent of max)</string>
     <string name="chart_temp_desc">Temperature chart.</string>
     <string name="chart_surface">Device surface</string>
-    <string name="chart_gpu_temp">Graphics</string>
+    <string name="chart_gpu_temp">GPU</string>
     <string name="chart_power_desc">Power chart.</string>
     <string name="chart_power_legend">Power (W)</string>
     <string name="power_axis_top">%1$s W</string>
@@ -495,7 +495,7 @@
     <string name="reason_target_met">The game kept its target of %1$d fps.</string>
     <string name="reason_fps_short">The frame rate often fell below %1$d fps.</string>
     <string name="reason_cpu_bound">The CPU was at its limit.</string>
-    <string name="reason_gpu_bound">Graphics was at its limit.</string>
+    <string name="reason_gpu_bound">GPU was at its limit.</string>
     <string name="reason_thermal">Heat slowed the device down.</string>
     <string name="reason_over">Unused speed was costing battery.</string>
     <string name="reason_hot">The device reached %1$s.</string>
@@ -537,7 +537,7 @@
         <item quantity="other">%d levels lower</item>
     </plurals>
     <string name="obs_thermal">The device got close to its temperature target, so heat comes first.</string>
-    <string name="obs_short_gpu">Frames fell short in heavy scenes while graphics ran at its top speed.</string>
+    <string name="obs_short_gpu">Frames fell short in heavy scenes while the GPU ran at its top speed.</string>
     <string name="obs_short_cpu">Frames fell short in heavy scenes while the CPU ran at its top speed.</string>
     <string name="obs_short">Frames often fell short of the %1$d fps target.</string>
     <string name="obs_unused">%1$s mostly ran below half its top speed.</string>
