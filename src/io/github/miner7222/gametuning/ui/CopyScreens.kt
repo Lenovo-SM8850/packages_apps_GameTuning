@@ -137,7 +137,6 @@ private fun CopyBody(vm: AppViewModel, route: Route.Copy, form: CopyForm, wide: 
                         )
                     }
                 }
-                Muted(stringResource(R.string.same_game_note))
                 for (m in Modes.ALL) if (m in form.modes && m != route.mode && conflict(route.pkg, m)) {
                     Muted(stringResource(R.string.already_has, ctx.modeName(m), name), style = MaterialTheme.typography.bodyMedium)
                     conflictRow(route.pkg, m, ctx.modeName(m))
@@ -196,9 +195,9 @@ private fun CopyBody(vm: AppViewModel, route: Route.Copy, form: CopyForm, wide: 
     @Composable
     fun options() {
         TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(if (wide) 24.dp else 28.dp), if (wide) cs.surfaceContainerHigh else cs.surfaceContainer) {
-            SwitchRow(stringResource(R.string.start_using_there), stringResource(R.string.start_using_there_note), form.startUsing, { form.startUsing = it }, minHeight = 76.dp, padding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (wide) 20.dp else 24.dp, vertical = 12.dp))
+            SwitchRow(stringResource(R.string.start_using_there), null, form.startUsing, { form.startUsing = it }, minHeight = 56.dp, padding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (wide) 20.dp else 24.dp, vertical = 12.dp))
             androidx.compose.material3.HorizontalDivider(color = cs.outlineVariant)
-            SwitchRow(stringResource(R.string.copy_expert_title), stringResource(if (wide) R.string.copy_expert_note_short else R.string.copy_expert_note), form.expertToOthers, { form.expertToOthers = it }, minHeight = 96.dp, padding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (wide) 20.dp else 24.dp, vertical = 12.dp))
+            SwitchRow(stringResource(R.string.copy_expert_title), stringResource(R.string.copy_expert_note_short), form.expertToOthers, { form.expertToOthers = it }, minHeight = 72.dp, padding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (wide) 20.dp else 24.dp, vertical = 12.dp))
         }
     }
 
@@ -253,8 +252,7 @@ fun CopyScreen(vm: AppViewModel, nav: Nav, route: Route.Copy) {
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Muted(stringResource(R.string.copy_intro), Modifier.padding(horizontal = 8.dp, vertical = 4.dp), MaterialTheme.typography.bodyMedium)
-                Box(Modifier.padding(top = 12.dp)) { CopyBody(vm, route, form, false) }
+                CopyBody(vm, route, form, false)
             }
         }
     }
@@ -277,8 +275,7 @@ fun CopyDialog(vm: AppViewModel, nav: Nav, route: Route.Copy) {
         Surface(Modifier.widthIn(max = 960.dp).fillMaxWidth(0.9f), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainer) {
             Column(Modifier.padding(24.dp)) {
                 Text(stringResource(R.string.copy_title, name), style = MaterialTheme.typography.headlineSmall)
-                Muted(stringResource(R.string.copy_intro), Modifier.padding(top = 4.dp, bottom = 16.dp), MaterialTheme.typography.bodyMedium)
-                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) { CopyBody(vm, route, form, true) }
+                Column(Modifier.weight(1f, fill = false).padding(top = 16.dp).verticalScroll(rememberScrollState())) { CopyBody(vm, route, form, true) }
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = { nav.pop() }, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
                     Button(onClick = { doCopy(vm, route, form); nav.pop() }, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.copy)) }

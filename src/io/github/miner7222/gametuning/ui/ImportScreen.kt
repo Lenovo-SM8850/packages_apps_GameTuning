@@ -194,7 +194,6 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
         value = null
         value = withContext(Dispatchers.IO) { try { vm.importPreview(item, baseMode) } catch (_: Exception) { emptyList() } }
     }
-    val game = vm.games.label(pkg)
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
@@ -202,13 +201,13 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
                 style = if (pane) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
             )
             val where = if (item is ImportItem.Mine) stringResource(R.string.from_where, item.subtitle) else stringResource(R.string.builtin_setting)
-            Muted(stringResource(R.string.later_changes, where, game), style = MaterialTheme.typography.bodyMedium)
+            Muted(where, style = MaterialTheme.typography.bodyMedium)
         }
         if (item is ImportItem.BuiltIn) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 SectionLabel(stringResource(R.string.start_from_its), Modifier.padding(0.dp))
                 ConnectedChoice(SOURCE_MODES.map { it to (if (it == 4) stringResource(R.string.mode_maximum) else ctx.modeName(it)) }, baseMode, { baseMode = it }, Modifier.widthIn(max = 640.dp))
-                Muted(stringResource(if (baseMode == 4) R.string.maximum_hint else R.string.import_mode_hint))
+                if (baseMode == 4) Muted(stringResource(R.string.maximum_hint))
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -219,7 +218,6 @@ private fun ImportDetail(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, ite
             else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 list.forEach { Tag(it) }
             }
-            Muted(stringResource(R.string.matched_to_device))
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SectionLabel(stringResource(R.string.into_profile_label), Modifier.padding(0.dp))

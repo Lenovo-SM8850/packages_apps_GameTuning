@@ -153,7 +153,7 @@ fun ExpertScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                 Box(Modifier.weight(1f)) { TopBar(stringResource(R.string.expert_title), subtitle, { nav.pop() }) }
                 Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer) {
                     Row(Modifier.heightIn(min = 40.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Rounded.Warning, null, Modifier.size(18.dp)); Text(stringResource(R.string.one_thing_short), style = MaterialTheme.typography.bodyMedium)
+                        Icon(Icons.Rounded.Warning, null, Modifier.size(18.dp)); Text(stringResource(R.string.expert_warning), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -452,7 +452,6 @@ private fun SceneEditor(vm: AppViewModel, st: TuningState, row: SceneRow, pane: 
                 ExactStepDialog(stringResource(R.string.exact_steps_for, label), ladder.map { Freq.one(res, it) }, lo, hi, { a, b -> set(a, b) }, { picker = -1 })
             }
         }
-        Muted(stringResource(R.string.scene_limits))
         if (!pane) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = { editScenes(vm, ctx.getString(R.string.saved_scene_removed, id)) { l -> l.removeAll { it.sceneId == id } }; onDeleted() }, Modifier.heightIn(min = 48.dp)) {
@@ -581,7 +580,7 @@ private fun BoostBehavior(vm: AppViewModel, st: TuningState) {
     SliderField(
         stringResource(R.string.boost_length), e.boostLengthMs.coerceIn(100, 2000).toFloat(), 100f..2000f, 18, { "${(it / 100).roundToInt() * 100} ms" },
         { v -> val ms = (v / 100).roundToInt() * 100; vm.edit(ctx.getString(R.string.saved_boost_length, ms)) { cfg, d, _ -> cfg.boostLengthMs = ms; d } },
-        description = stringResource(R.string.boost_length_desc), minLabel = "100 ms", maxLabel = "2000 ms",
+        minLabel = "100 ms", maxLabel = "2000 ms",
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.drop_sensitivity), style = MaterialTheme.typography.bodyLarge)

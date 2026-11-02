@@ -96,15 +96,6 @@ fun presetDiff(ps: ProfileState, vm: AppViewModel, mode: Int, preset: Preset?): 
 }
 
 @Composable
-fun modeHint(mode: Int) = stringResource(
-    when (mode) {
-        Modes.PERFORMANCE -> R.string.mode_performance_hint
-        Modes.BATTERY -> R.string.mode_battery_hint
-        else -> R.string.mode_balanced_hint
-    },
-)
-
-@Composable
 fun GameIcon(vm: AppViewModel, pkg: String, label: String, size: Dp, selected: Boolean = false) {
     val px = with(androidx.compose.ui.platform.LocalDensity.current) { size.roundToPx() }
     val icon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, pkg) { value = vm.games.icon(pkg, px) }
@@ -128,7 +119,6 @@ fun GameListPane(
         item {
             Column(Modifier.padding(start = 8.dp, top = if (wide) 16.dp else 40.dp, bottom = 16.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.app_name), style = if (wide) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-                Muted(stringResource(if (wide) R.string.home_subtitle_wide else R.string.home_subtitle), style = MaterialTheme.typography.bodyMedium)
             }
         }
         item {
@@ -258,7 +248,6 @@ fun ProfilePane(
             GameIcon(vm, pkg, ps.label, if (wide) 56.dp else 64.dp, selected = true)
             Column(Modifier.weight(1f)) {
                 Text(ps.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Muted(stringResource(R.string.profile_header), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -275,9 +264,9 @@ fun ProfilePane(
                     contentColor = if (on) cs.onPrimary else cs.onSurface,
                     modifier = Modifier.weight(1f).fillMaxSize().selectable(selected = on, role = Role.RadioButton) { vm.setMode(pkg, m) },
                 ) {
-                    Column(Modifier.padding(if (wide) 14.dp else 16.dp).heightIn(min = if (wide) 108.dp else 128.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.padding(if (wide) 14.dp else 16.dp).heightIn(min = if (wide) 88.dp else 104.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(ctx.modeName(m), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(modeHint(m), style = MaterialTheme.typography.bodySmall)
+                        if (m == Modes.PERFORMANCE) Text(stringResource(R.string.mode_performance_hint), style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.weight(1f))
                         Tag(
                             ps.libs[m]!!.inUse?.name ?: stringResource(R.string.builtin_setting),
@@ -410,16 +399,16 @@ fun ProfilePane(
         }
         val rows = buildList<@Composable (Dp) -> Unit> {
             if (!wide) add { h ->
-                NavRow(stringResource(R.string.tuning_details), stringResource(R.string.edits_preset, current?.name ?: stringResource(R.string.builtin_setting)), { nav.push(Route.Tuning(pkg, ps.mode)) }, icon = Icons.Rounded.Tune, minHeight = h)
+                NavRow(stringResource(R.string.tuning_details), null, { nav.push(Route.Tuning(pkg, ps.mode)) }, icon = Icons.Rounded.Tune, minHeight = h)
             }
             add { h -> NavRow(stringResource(R.string.records_title), recText, { nav.push(Route.Records(pkg)) }, icon = if (wide) null else Icons.Rounded.BarChart, minHeight = h) }
-            add { h -> NavRow(stringResource(R.string.import_title), stringResource(R.string.import_sub), { nav.push(Route.Import(pkg, ps.mode)) }, icon = if (wide) null else Icons.Rounded.Download, minHeight = h) }
+            add { h -> NavRow(stringResource(R.string.import_title), null, { nav.push(Route.Import(pkg, ps.mode)) }, icon = if (wide) null else Icons.Rounded.Download, minHeight = h) }
             add { h -> NavRow(stringResource(R.string.expert_title), stringResource(R.string.expert_sub), { nav.push(Route.Expert(pkg, ps.mode)) }, icon = if (wide) null else Icons.Rounded.Code, minHeight = h) }
         }
         TonalCard(Modifier.fillMaxWidth(), RoundedCornerShape(if (wide) 24.dp else 28.dp)) {
             rows.forEachIndexed { i, row ->
                 if (i > 0) androidx.compose.material3.HorizontalDivider(color = cs.outlineVariant)
-                row(if (wide) 56.dp else 72.dp)
+                row(56.dp)
             }
         }
     }
@@ -444,7 +433,6 @@ fun ProfilePane(
             notice()
             nowCard()
             moreRows()
-            Muted(stringResource(R.string.profile_footer), Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
         }
     }
 }

@@ -131,7 +131,6 @@ fun TuningScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                             Sec.SPEED -> Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                                 Column(Modifier.weight(1.5f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Text(stringResource(R.string.speed), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                    Muted(stringResource(R.string.speed_hint))
                                     SpeedContent(vm, st)
                                 }
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -159,19 +158,13 @@ fun TuningScreen(vm: AppViewModel, nav: Nav, pkg: String, mode: Int, wide: Boole
                     }
                     TonalCard(Modifier.padding(top = 12.dp).fillMaxWidth()) {
                         Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(stringResource(R.string.speed), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Muted(stringResource(R.string.speed_hint))
-                            }
+                            Text(stringResource(R.string.speed), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             SpeedContent(vm, st)
                         }
                     }
                     TonalCard(Modifier.padding(top = 12.dp).fillMaxWidth()) {
                         Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(stringResource(R.string.heat_limit), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Muted(stringResource(R.string.protection_stays))
-                            }
+                            Text(stringResource(R.string.heat_limit), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             HeatContent(vm, st, vertical = false)
                         }
                     }
@@ -548,11 +541,11 @@ private fun AdvancedContent(vm: AppViewModel, nav: Nav, st: TuningState) {
     val threadName = stringResource(
         when (e.threadRules) { 0 -> R.string.threads_off; 2 -> R.string.threads_base; 3 -> R.string.threads_custom; else -> R.string.threads_own },
     )
-    NavRow(stringResource(R.string.thread_placement), stringResource(R.string.thread_desc), { dialog = "threads" }, value = threadName, padding = noPad)
+    NavRow(stringResource(R.string.thread_placement), null, { dialog = "threads" }, value = threadName, padding = noPad, minHeight = 56.dp)
     NavRow(
-        stringResource(R.string.edit_by_temp), stringResource(R.string.edit_by_temp_desc),
+        stringResource(R.string.edit_by_temp), null,
         { nav.push(Route.Steps(st.pkg, st.mode)) },
-        value = pluralStringResource(R.plurals.steps_count, e.steps?.size ?: 0, e.steps?.size ?: 0), padding = noPad,
+        value = pluralStringResource(R.plurals.steps_count, e.steps?.size ?: 0, e.steps?.size ?: 0), padding = noPad, minHeight = 56.dp,
     )
 
     if (dialog == "gpu") {
@@ -589,7 +582,7 @@ private fun UnsavedContent(vm: AppViewModel, st: TuningState, wide: Boolean) {
     if (picker) {
         val ctx = LocalContext.current
         val opts = listOf(0 to ctx.getString(R.string.off)) + (10..50 step 5).map { it to ctx.getString(R.string.below_percent, it) }
-        ChoiceDialog(stringResource(R.string.low_battery), opts, st.globalsLowBattery, { vm.setLowBattery(it) }, { picker = false }, stringResource(R.string.low_battery_dialog))
+        ChoiceDialog(stringResource(R.string.low_battery), opts, st.globalsLowBattery, { vm.setLowBattery(it) }, { picker = false })
     }
 }
 

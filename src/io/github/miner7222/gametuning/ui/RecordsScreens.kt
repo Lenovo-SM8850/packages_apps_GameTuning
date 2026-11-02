@@ -230,10 +230,9 @@ fun RecordsScreen(vm: AppViewModel, nav: Nav, pkg: String, wide: Boolean, openId
                 ) {
                     Column(Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(stringResource(R.string.records_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        Muted(ps.label, style = MaterialTheme.typography.bodyMedium)
+                        Muted(stringResource(R.string.records_sub_wide, ps.label), style = MaterialTheme.typography.bodyMedium)
                     }
                     armSwitch(false)
-                    Muted(stringResource(R.string.rec_arm_note), Modifier.padding(horizontal = 8.dp))
                     chips()
                     list()
                 }
@@ -243,7 +242,7 @@ fun RecordsScreen(vm: AppViewModel, nav: Nav, pkg: String, wide: Boolean, openId
 
     deleteId?.let { id ->
         ConfirmDialog(
-            stringResource(R.string.rec_delete_confirm), stringResource(R.string.rec_delete_body), stringResource(R.string.delete),
+            stringResource(R.string.rec_delete_confirm), null, stringResource(R.string.delete),
             destructive = true, onConfirm = { vm.deleteRecord(id) }, onDismiss = { deleteId = null },
         )
     }
@@ -340,7 +339,7 @@ fun ResultScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String) {
     }
     if (confirm && info != null) {
         ConfirmDialog(
-            stringResource(R.string.rec_delete_confirm), stringResource(R.string.rec_delete_body), stringResource(R.string.delete),
+            stringResource(R.string.rec_delete_confirm), null, stringResource(R.string.delete),
             destructive = true, onConfirm = { vm.deleteRecord(info.id) }, onDismiss = { confirm = false },
         )
     }
@@ -389,7 +388,7 @@ private fun ExportMenu(vm: AppViewModel, info: RecordingInfo) {
 }
 
 private class Tile(
-    val label: String, val value: String, val hint: String, val container: Color, val content: Color,
+    val label: String, val value: String, val hint: String?, val container: Color, val content: Color,
 )
 
 @Composable
@@ -404,7 +403,7 @@ private fun MetricTile(t: Tile, wide: Boolean, modifier: Modifier = Modifier) {
                 t.value, style = if (wide) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Text(t.hint, style = MaterialTheme.typography.labelSmall, color = t.content.copy(alpha = 0.78f), maxLines = 2)
+            if (t.hint != null) Text(t.hint, style = MaterialTheme.typography.labelSmall, color = t.content.copy(alpha = 0.78f), maxLines = 2)
         }
     }
 }
@@ -476,15 +475,15 @@ private fun ResultBody(
     val dash = "—"
     val avg = Tile(
         ctx.getString(R.string.average_frame_rate), formatFloat1(sum.avgFps.toDouble()),
-        ctx.getString(if (wide) R.string.tile_avg_hint_l else R.string.tile_avg_hint), primaryTile, primaryOn,
+        null, primaryTile, primaryOn,
     )
     val floor = Tile(
         ctx.getString(R.string.steady_floor), formatFloat1(sum.floor5Fps.toDouble()),
-        if (wide) ctx.getString(R.string.tile_floor_hint_l) else ctx.getString(R.string.tile_floor_hint, 95), plainTile, plainOn,
+        ctx.getString(R.string.tile_floor_hint, 95), plainTile, plainOn,
     )
     val temp = Tile(
         ctx.getString(R.string.max_temperature), if (sum.maxSkinC > 0f) tf.absolute(sum.maxSkinC.toDouble()) else dash,
-        ctx.getString(if (wide) R.string.tile_temp_hint_l else R.string.tile_temp_hint), warmTile, warmOn,
+        ctx.getString(R.string.tile_temp_hint), warmTile, warmOn,
     )
     val longest = if (sum.tail95 < 0f) null else Tile(
         ctx.getString(R.string.longest_frames), String.format(Locale.getDefault(), "%.1f×", 1.0 + sum.tail95),
@@ -496,7 +495,7 @@ private fun ResultBody(
     )
     val power = Tile(
         ctx.getString(R.string.power_use), if (sum.avgPowerMw >= 0) formatPower(sum.avgPowerMw) else ctx.getString(R.string.charging),
-        ctx.getString(if (sum.avgPowerMw >= 0) (if (wide) R.string.tile_power_hint_l else R.string.tile_power_hint) else R.string.tile_power_none),
+        ctx.getString(if (sum.avgPowerMw >= 0) R.string.tile_power_hint else R.string.tile_power_none),
         plainTile, plainOn,
     )
     val allTiles = if (wide) listOfNotNull(avg, floor, longest, stutter, temp, power) else listOfNotNull(avg, floor, temp, longest, stutter, power)

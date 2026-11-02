@@ -199,7 +199,6 @@ private fun NameDialog(title: String, initial: String, onConfirm: (String) -> Un
                     value = name, onValueChange = { name = it.take(64) }, singleLine = true,
                     label = { Text(stringResource(R.string.name)) }, modifier = Modifier.fillMaxWidth(),
                 )
-                Muted(stringResource(R.string.name_note))
             }
         },
         confirmButton = {
@@ -274,7 +273,6 @@ fun SuggestScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Boo
                         } else {
                             rest.forEachIndexed { k, sg -> OtherSuggestion(sg, k + 2, false) { saving = k + 1 } }
                         }
-                        Muted(stringResource(R.string.suggest_footer), Modifier.padding(horizontal = 8.dp))
                     }
                 }
             }
@@ -403,7 +401,7 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
     val found = rememberRecord(vm, nav, pkg, id)
     Column(Modifier.fillMaxSize()) {
         TopBar(
-            stringResource(R.string.auto_title), stringResource(R.string.auto_sub), { nav.pop() },
+            stringResource(R.string.auto_title), null, { nav.pop() },
             Modifier.padding(horizontal = if (wide) 20.dp else 0.dp),
         )
         if (found == null) {
@@ -467,13 +465,13 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
             val cs = MaterialTheme.colorScheme
             Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(if (wide) 12.dp else 0.dp)) {
                 val rows = listOf(
-                    false to (stringResource(R.string.auto_where_change, baseName) to stringResource(R.string.auto_where_change_note)),
-                    true to (stringResource(R.string.save_as_new_preset_long) to stringResource(R.string.auto_where_new_note, baseName)),
+                    false to stringResource(R.string.auto_where_change, baseName),
+                    true to stringResource(R.string.save_as_new_preset_long),
                 )
                 Surface(shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                     if (wide) {
                         Row(Modifier.fillMaxWidth().padding(0.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            rows.forEach { (isNew, texts) ->
+                            rows.forEach { (isNew, text) ->
                                 val enabled = isNew || canChange
                                 val on = creatingNew == isNew
                                 Surface(
@@ -481,19 +479,16 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
                                     contentColor = if (on) cs.onPrimaryContainer else cs.onSurface, modifier = Modifier.weight(1f)
                                         .selectable(on, enabled = enabled, role = Role.RadioButton) { asNew = isNew },
                                 ) {
-                                    Row(Modifier.heightIn(min = 72.dp).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+                                    Row(Modifier.heightIn(min = 56.dp).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                         RadioButton(selected = on, onClick = null, enabled = enabled)
-                                        Column {
-                                            Text(texts.first, style = MaterialTheme.typography.bodyLarge)
-                                            Text(texts.second, style = MaterialTheme.typography.bodySmall, color = if (on) cs.onPrimaryContainer else cs.onSurfaceVariant)
-                                        }
+                                        Text(text, style = MaterialTheme.typography.bodyLarge)
                                     }
                                 }
                             }
                         }
                     } else {
                         Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-                            rows.forEach { (isNew, texts) ->
+                            rows.forEach { (isNew, text) ->
                                 val enabled = isNew || canChange
                                 val on = creatingNew == isNew
                                 Row(
@@ -501,10 +496,7 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
                                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
                                 ) {
                                     RadioButton(selected = on, onClick = null, enabled = enabled)
-                                    Column {
-                                        Text(texts.first, style = MaterialTheme.typography.bodyLarge, color = if (enabled) androidx.compose.ui.graphics.Color.Unspecified else cs.onSurfaceVariant)
-                                        Muted(texts.second)
-                                    }
+                                    Text(text, style = MaterialTheme.typography.bodyLarge, color = if (enabled) androidx.compose.ui.graphics.Color.Unspecified else cs.onSurfaceVariant)
                                 }
                             }
                         }
@@ -515,7 +507,6 @@ fun AutoTuneScreen(vm: AppViewModel, nav: Nav, pkg: String, id: String, wide: Bo
                 OutlinedTextField(
                     value = name, onValueChange = { name = it.take(64) }, singleLine = true,
                     label = { Text(stringResource(R.string.name)) },
-                    supportingText = { Text(stringResource(R.string.name_note)) },
                     modifier = Modifier.padding(top = 12.dp).then(if (wide) Modifier.widthIn(max = 480.dp) else Modifier.fillMaxWidth()),
                 )
             }

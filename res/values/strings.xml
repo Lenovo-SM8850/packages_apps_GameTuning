@@ -27,8 +27,6 @@
     <string name="highest">Highest</string>
 
     <!-- Home -->
-    <string name="home_subtitle">Games you added in Game Space appear here.</string>
-    <string name="home_subtitle_wide">Games you added in Game Space.</string>
     <string name="search_games">Search games</string>
     <string name="filter_all">All</string>
     <string name="filter_adjusted">Adjusted</string>
@@ -37,22 +35,19 @@
     <string name="game_chip">%1$s · %2$s</string>
     <string name="manage_games">Manage games in Game Space</string>
     <string name="no_games">No games yet</string>
-    <string name="no_games_body">Add games in Game Space, then tune them here.</string>
+    <string name="no_games_body">Add games in Game Space.</string>
     <string name="no_matches">No games match</string>
     <string name="tip_title">Keep several presets per profile</string>
-    <string name="tip_body">Save one preset for long sessions and another for top speed, then switch whenever you like.</string>
+    <string name="tip_body">Save one preset for long sessions and another for top speed.</string>
     <string name="dismiss_tip">Dismiss tip</string>
 
     <!-- Profile -->
     <string name="profile">Profile</string>
-    <string name="profile_header">Performance tuning</string>
     <string name="mode_balanced">Balanced</string>
     <string name="mode_performance">Performance</string>
     <string name="mode_battery">Battery</string>
     <string name="mode_maximum">Maximum</string>
-    <string name="mode_balanced_hint">A good everyday default</string>
-    <string name="mode_performance_hint">Speed first. Gets warmer.</string>
-    <string name="mode_battery_hint">Saves battery and heat</string>
+    <string name="mode_performance_hint">Runs warmer</string>
     <string name="builtin_setting">Built-in setting</string>
     <string name="builtin_diff">Game default, no adjustments</string>
     <string name="diff_none">Game default, no adjustments</string>
@@ -71,17 +66,14 @@
     <string name="heat_frame_short">Heat · Frame rate</string>
     <string name="no_limit">No limit</string>
     <string name="fps_value">%1$d fps</string>
-    <string name="now_note">Values when the device is cool. They step down as it warms up.</string>
+    <string name="now_note">Values when the device is cool.</string>
     <string name="tuning_details">Tuning details</string>
-    <string name="edits_preset">Edits %1$s</string>
     <string name="records_title">Benchmark records</string>
     <string name="next_play_count">The next play will be recorded · %1$s</string>
     <string name="recording_on_count">Recording on · %1$s</string>
     <string name="import_title">Import a setting</string>
-    <string name="import_sub">From your other games or built-in settings</string>
     <string name="expert_title">Expert settings</string>
     <string name="expert_sub">Scene rows, thread rules, boost behavior</string>
-    <string name="profile_footer">Each profile keeps its own presets. Switching profiles in the in-game panel uses the preset in use for that profile.</string>
     <string name="notice_lowered_cpu">Last session: CPU top speed was lowered for %1$d min because the device reached %2$s.</string>
     <string name="notice_lowered_fastest">Last session: fastest core top speed was lowered for %1$d min because the device reached %2$s.</string>
     <string name="notice_lowered_graphics">Last session: graphics top speed was lowered for %1$d min because the device reached %2$s.</string>
@@ -92,8 +84,6 @@
     <!-- Presets -->
     <string name="presets_title">Presets</string>
     <string name="presets_sub">%1$s · %2$d of %3$d in %4$s</string>
-    <string name="presets_note">Tuning always edits the preset in use. Records remember which preset was in use, so you can compare them. Up to 10 presets per profile.</string>
-    <string name="presets_note_short">Tuning always edits the preset in use. Up to 10 presets per profile.</string>
     <string name="preset_limit">A profile can hold up to 10 presets.</string>
     <string name="in_use">In use</string>
     <string name="more_for">More for %1$s</string>
@@ -104,22 +94,18 @@
     <string name="start_from">Start from</string>
     <string name="copy_of_in_use">Copy of %1$s (in use)</string>
     <string name="name_copy">%1$s copy</string>
-    <string name="new_preset_note">It becomes the preset in use. You can undo.</string>
-    <string name="name_note">Shown in the in-game panel and in records.</string>
     <string name="save_name">Save name</string>
     <string name="use_and_edit">Use and edit tuning</string>
     <string name="use_this_preset">Use this preset</string>
-    <string name="preset_in_use_note">This preset is in use</string>
     <string name="duplicate">Duplicate</string>
-    <string name="duplicate_note">Makes “%1$s” and starts using it</string>
+    <string name="duplicate_note">Makes “%1$s” and uses it</string>
     <string name="copy_to">Copy to other profiles or games</string>
-    <string name="choose_several">Choose several at once</string>
     <string name="records_with">Records with this preset · %1$d</string>
     <string name="delete_preset_q">Delete “%1$s”?</string>
     <string name="delete_body">Records keep its name.</string>
-    <string name="delete_inuse_body">It is in use now, so %1$s goes back to the built-in setting. Records keep its name.</string>
+    <string name="delete_inuse_body">%1$s goes back to the built-in setting.</string>
     <string name="changes_from_builtin">Changes from the built-in setting</string>
-    <string name="nothing_changed">Nothing changed. This is what the game uses on its own.</string>
+    <string name="nothing_changed">Nothing changed.</string>
     <string name="recorded_with">Recorded with this preset</string>
     <string name="average_fps">Average fps</string>
     <string name="max_temp">Max temp</string>
@@ -162,10 +148,8 @@
 
     <!-- Copy -->
     <string name="copy_title">Copy “%1$s”</string>
-    <string name="copy_intro">Adds a copy to each place you choose. Nothing there changes until you start using it.</string>
     <string name="other_profiles_of">Other profiles of %1$s</string>
     <string name="this_one">%1$s (this one)</string>
-    <string name="same_game_note">Scene rows and thread rules are always copied within the same game.</string>
     <string name="already_has">%1$s already has “%2$s”</string>
     <string name="other_games">Other games</string>
     <string name="select_all">Select all</string>
@@ -175,9 +159,7 @@
     <string name="into_profile">Into %1$s</string>
     <string name="keep_both">Keep both (as “%1$s”)</string>
     <string name="start_using_there">Start using it there</string>
-    <string name="start_using_there_note">Off keeps each place on its current preset.</string>
     <string name="copy_expert_title">Also copy scene rows and thread rules to other games</string>
-    <string name="copy_expert_note">Scene numbers mean different things in different games. Use this only for the same game or engine.</string>
     <string name="copy_expert_note_short">Use this only for the same game or engine.</string>
     <string name="copy_summary">Adds “%1$s” to %2$s of this game and %3$s.</string>
     <plurals name="profiles_count">
@@ -189,7 +171,7 @@
         <item quantity="other">%d other games</item>
     </plurals>
     <string name="replace_q">Replace “%1$s” in %2$s?</string>
-    <string name="replace_body">It is replaced with the copied setting. If it is in use there, that game runs with the copied setting next time.</string>
+    <string name="replace_body">It is replaced with the copied setting.</string>
     <string name="copy_done">Added %1$d copies</string>
     <string name="copy_partial">Added %1$d copies, skipped %2$d full profiles</string>
 
@@ -199,8 +181,7 @@
     <string name="starts_from_other">Starts from another setting · %1$d changes</string>
     <string name="speed_and_heat">Speed and heat</string>
     <string name="speed">Speed</string>
-    <string name="speed_hint">Drag a handle, or tap a value to pick exact steps.</string>
-    <string name="speed_foot">Higher speeds react faster but heat up sooner. Speeds step down from the right handle as the device warms.</string>
+    <string name="speed_foot">Higher speeds heat up sooner.</string>
     <string name="exact_steps_for">Pick exact steps for %1$s</string>
     <string name="cd_reset_row">Reset %1$s to the built-in setting</string>
     <string name="same_as_builtin">Same as built-in</string>
@@ -208,8 +189,7 @@
     <string name="change_top">%1$s top speed</string>
     <string name="change_low">%1$s minimum speed</string>
     <string name="heat_limit">Heat limit</string>
-    <string name="protection_stays">Built-in protection stays on</string>
-    <string name="heat_hint_wide">Higher limits keep speed longer, but the device gets warmer. Built-in protection stays on at every level.</string>
+    <string name="heat_hint_wide">Higher limits keep speed longer but run warmer.</string>
     <string name="heat_keep_cool">Keep cool</string>
     <string name="heat_normal">Normal</string>
     <string name="heat_warmer">Allow warmer</string>
@@ -228,55 +208,52 @@
     <string name="temp_target">Temperature target</string>
     <string name="temp_target_desc">Speeds drop early to stay under this.</string>
     <string name="power_target">Power target</string>
-    <string name="power_target_desc">Average power the game should stay under.</string>
+    <string name="power_target_desc">Average power limit</string>
     <string name="ramp_up">Ramp-up speed</string>
-    <string name="ramp_up_desc">How fast speeds rise when frames drop. 0 turns it off.</string>
+    <string name="ramp_up_desc">Speed rise on frame drops. 0 is off.</string>
     <string name="hold_strength">Hold strength</string>
-    <string name="hold_desc">How strongly game work stays on fast cores.</string>
+    <string name="hold_desc">How strongly game work stays on fast cores</string>
     <string name="stutter_boost">Stutter boost</string>
-    <string name="stutter_desc">Raises speed briefly when a frame is late.</string>
+    <string name="stutter_desc">Brief speed boost for late frames</string>
     <string name="render_resolution">Render resolution</string>
-    <string name="render_desc">Lower is lighter and cooler but less sharp.</string>
+    <string name="render_desc">Lower is cooler but less sharp.</string>
     <string name="render_blocked">This game doesn\'t allow changing its resolution.</string>
     <string name="fps_limit">Frame rate limit</string>
-    <string name="fps_desc">Sets this game\'s screen to the closest refresh rate at or above the limit, even when the system\'s peak rate is lower.</string>
+    <string name="fps_desc">Uses a refresh rate at or above the limit.</string>
     <string name="fps_blocked">This game doesn\'t allow a frame rate limit.</string>
     <string name="lock_refresh">Lock refresh rate</string>
-    <string name="lock_refresh_desc">Keeps the screen at its highest refresh rate.</string>
+    <string name="lock_refresh_desc">Always uses the highest refresh rate</string>
     <string name="cores_awake">Keep all cores awake</string>
-    <string name="cores_desc">Helps sudden heavy scenes, uses a little more battery.</string>
+    <string name="cores_desc">Helps heavy scenes, uses more battery.</string>
     <string name="gpu_idle">Graphics idle speed</string>
-    <string name="gpu_idle_desc">Where graphics speed starts before it adapts to the load.</string>
+    <string name="gpu_idle_desc">Starting graphics speed</string>
     <string name="wait_after_launch">Wait after launch</string>
-    <string name="wait_desc">Raise it if loading is unstable.</string>
+    <string name="wait_desc">Raise if loading is unstable.</string>
     <string name="thread_placement">Game thread placement</string>
-    <string name="thread_desc">Puts known game threads on suitable cores.</string>
     <string name="threads_off">Off</string>
     <string name="threads_own">This game\'s rules</string>
     <string name="threads_base">Rules from the starting point</string>
     <string name="threads_custom">Your rules</string>
     <string name="edit_by_temp">Edit by temperature</string>
-    <string name="edit_by_temp_desc">Lowers speed as the device warms up.</string>
     <plurals name="steps_count">
         <item quantity="one">%d step</item>
         <item quantity="other">%d steps</item>
     </plurals>
     <string name="not_saved_in_presets">Not saved in presets</string>
     <string name="low_battery">Low battery protection</string>
-    <string name="low_battery_desc">All games. Turns off adjustments when the battery is low.</string>
-    <string name="low_battery_dialog">Adjustments stay off below this level.</string>
+    <string name="low_battery_desc">Turns off adjustments when the battery is low.</string>
     <string name="below_percent">Below %1$d%%</string>
     <string name="go_back_stable">Go back to last stable setting</string>
     <string name="reset_preset">Reset this preset</string>
     <string name="reset_game">Reset all of this game</string>
     <string name="reset_preset_q">Reset “%1$s”?</string>
-    <string name="reset_preset_body">Its values go back to the built-in setting. You can undo.</string>
+    <string name="reset_preset_body">Its values go back to the built-in setting.</string>
     <string name="reset_game_q">Reset all of %1$s?</string>
-    <string name="reset_game_body">All profiles go back to the built-in setting and every preset of this game is removed. You can undo.</string>
+    <string name="reset_game_body">All profiles go back to the built-in setting and every preset of this game is removed.</string>
     <string name="went_back_stable">Went back to the last stable setting</string>
     <string name="preset_reset">Preset reset</string>
     <string name="game_reset">Game reset</string>
-    <string name="save_failed">Couldn\'t save. Try again.</string>
+    <string name="save_failed">Couldn\'t save.</string>
     <string name="display_apply_failed">Some display values couldn\'t be applied.</string>
     <string name="saved_to">Saved to %1$s · %2$s</string>
     <string name="saved_speed">%1$s speed %2$s</string>
@@ -297,7 +274,7 @@
 
     <!-- Steps -->
     <string name="steps_title">Temperature steps</string>
-    <string name="steps_intro">When the device reaches a step\'s temperature, that step\'s speeds apply. Lower the speeds in hotter steps to limit heat.</string>
+    <string name="steps_intro">Each step\'s speeds apply once the device reaches its temperature.</string>
     <string name="step_first">Step 1: cool</string>
     <string name="step_row">Step %1$d: from %2$s</string>
     <string name="steps_temp_title">Starts at</string>
@@ -309,8 +286,7 @@
     <string name="saved_steps_cleared">Using the starting point\'s steps</string>
 
     <!-- Expert -->
-    <string name="expert_warning">These can make the game stutter or heat up quickly. Change one thing at a time.</string>
-    <string name="one_thing_short">Change one thing at a time</string>
+    <string name="expert_warning">Can cause stutter or overheating.</string>
     <string name="reset_expert">Reset expert settings</string>
     <string name="saved_expert_reset">Expert settings reset</string>
     <string name="scene_rows">Scene rows</string>
@@ -322,7 +298,7 @@
     <string name="rules_sum">%1$d rules · %2$d real-time</string>
     <string name="boost_sum">%1$d ms · %2$s · %3$s</string>
     <string name="use_scene_settings">Use scene settings</string>
-    <string name="use_scene_desc">Each row applies its speeds for a set time when that scene starts.</string>
+    <string name="use_scene_desc">Rows set speeds for a time when a scene starts.</string>
     <string name="saved_scene_mode">Scene settings: %1$s</string>
     <string name="scenes_seen">Seen in your last record: %1$s</string>
     <string name="scene_n">Scene %1$d</string>
@@ -337,10 +313,9 @@
     <string name="scene_number_hint">0 to 100000</string>
     <string name="scene_number_bad">Pick a free number from 0 to 100000.</string>
     <string name="delete_scene_row">Delete scene row</string>
-    <string name="scene_limits">Scene ranges follow the same safety limits as the main speeds.</string>
     <string name="saved_scene">Scene %1$d</string>
     <string name="saved_scene_removed">Scene %1$d removed</string>
-    <string name="thread_intro">Run known game threads on the cores you choose. Up to 16 rules, 8 of them with real-time priority.</string>
+    <string name="thread_intro">Up to 16 rules, 8 of them with real-time priority.</string>
     <string name="thread_rule">Thread rule</string>
     <string name="add_rule">Add rule</string>
     <string name="delete_rule_n">Delete rule %1$s</string>
@@ -353,7 +328,7 @@
     <string name="cores_n">Cores %1$s</string>
     <string name="rt_priority">Real-time priority</string>
     <string name="rt_range">Range 90–99</string>
-    <string name="rt_desc">Lets this thread run ahead of normal work.</string>
+    <string name="rt_desc">Runs ahead of normal work</string>
     <string name="rt_value">Real-time %1$d</string>
     <string name="rt_limit">Eight rules already use real-time priority.</string>
     <string name="normal_priority">Normal priority</string>
@@ -362,14 +337,13 @@
     <string name="saved_rule_added">Thread rule added</string>
     <string name="saved_rule_removed">Thread rule removed</string>
     <string name="boost_length">Boost length</string>
-    <string name="boost_length_desc">How long a frame-drop boost lasts.</string>
     <string name="drop_sensitivity">Drop sensitivity</string>
-    <string name="drop_sensitivity_desc">How small a frame drop starts a boost.</string>
+    <string name="drop_sensitivity_desc">Frame drop needed to trigger a boost</string>
     <string name="sensitivity_low">Low</string>
     <string name="sensitivity_medium">Medium</string>
     <string name="sensitivity_high">High</string>
     <string name="temp_smoothing">Temperature smoothing</string>
-    <string name="smoothing_desc">How far it must cool before speeds step back up.</string>
+    <string name="smoothing_desc">Cooling needed before speeds rise</string>
     <string name="saved_boost_length">Boost length %1$d ms</string>
     <string name="saved_sensitivity">Drop sensitivity</string>
     <string name="saved_smoothing">Temperature smoothing</string>
@@ -385,12 +359,9 @@
     <string name="no_presets_elsewhere">No presets in other games yet.</string>
     <string name="use_quoted">Use “%1$s”</string>
     <string name="from_where">From %1$s</string>
-    <string name="later_changes">%1$s. Later changes there won\'t affect %2$s.</string>
     <string name="start_from_its">Start from its</string>
-    <string name="import_mode_hint">Speeds are matched to this device\'s steps.</string>
-    <string name="maximum_hint">Fastest and hottest. Used only as a starting point.</string>
+    <string name="maximum_hint">Fastest and hottest.</string>
     <string name="what_it_changes">What it changes</string>
-    <string name="matched_to_device">Speeds are matched to this device\'s steps.</string>
     <string name="into_profile_label">Into profile</string>
     <string name="save_as">Save as</string>
     <string name="new_preset_use_named">New preset “%1$s” and start using it</string>
@@ -402,8 +373,7 @@
     <!-- Records -->
     <string name="rec_toast">Benchmark recording is on</string>
     <string name="rec_arm_title">Record when the game runs</string>
-    <string name="rec_arm_summary">Saves frame rate, speeds, temperature and power until you leave the game.</string>
-    <string name="rec_arm_note">A short notice appears when recording starts. The latest 20 records are kept. Power is not measured while charging.</string>
+    <string name="rec_arm_summary">Saves frame rate, speeds, temperature and power.</string>
     <string name="records_sub_wide">%1$s · latest 20 kept</string>
     <string name="rec_empty">No records yet</string>
     <string name="rec_pick_none">No results to show yet.</string>
@@ -411,7 +381,6 @@
     <string name="rec_no_data">No data saved</string>
     <string name="rec_delete">Delete record</string>
     <string name="rec_delete_confirm">Delete this record?</string>
-    <string name="rec_delete_body">It is removed from this device.</string>
     <string name="record_deleted">Record deleted</string>
     <string name="export_csv">Export as CSV</string>
     <string name="export_working">Exporting…</string>
@@ -420,7 +389,7 @@
     <string name="unnamed_preset">Unnamed</string>
     <string name="rec_mixed">Settings changed during this record, so it can\'t be used for suggestions.</string>
     <string name="rec_short">Play for at least 2 minutes to get suggestions.</string>
-    <string name="analysis_failed">Couldn\'t get a result. Try again.</string>
+    <string name="analysis_failed">Couldn\'t get a result.</string>
     <string name="retry">Try again</string>
 
     <!-- Result -->
@@ -433,17 +402,12 @@
     <string name="longest_frames">Longest frames</string>
     <string name="stutter">Stutter</string>
     <string name="power_use">Power use</string>
-    <string name="tile_avg_hint">Higher is better</string>
-    <string name="tile_avg_hint_l">Typical speed</string>
     <string name="tile_floor_hint">%1$d%% of the time above</string>
-    <string name="tile_floor_hint_l">Slowest stretches</string>
     <string name="tile_temp_hint">Near the surface</string>
-    <string name="tile_temp_hint_l">Peak while playing</string>
     <string name="tile_longest_hint">Worst vs. the target</string>
     <string name="tile_longest_hint_l">Versus a typical frame</string>
     <string name="tile_stutter_hint">Per 1,000 frames</string>
     <string name="tile_power_hint">Whole device</string>
-    <string name="tile_power_hint_l">Average draw</string>
     <string name="tile_power_none">Not measured while charging</string>
     <string name="show_all">Show all %1$d results</string>
     <string name="show_less">Show less</string>
@@ -493,11 +457,11 @@
     <string name="goal_title">What matters most?</string>
     <string name="goal">Goal</string>
     <string name="goal_frames">Smooth frames</string>
-    <string name="goal_frames_hint">Raise speeds where the game was held back.</string>
+    <string name="goal_frames_hint">Raise speeds where limited</string>
     <string name="goal_balanced">Balanced</string>
-    <string name="goal_balanced_hint">Fix shortfalls and trim what was not used.</string>
+    <string name="goal_balanced_hint">Fix shortfalls, trim unused speed</string>
     <string name="goal_efficiency">Cool and long battery</string>
-    <string name="goal_efficiency_hint">Lower speeds the game did not need.</string>
+    <string name="goal_efficiency_hint">Lower unused speeds</string>
     <string name="what_we_saw">What we saw</string>
     <string name="saw_kept">Kept the %1$d fps target %2$d%% of the time.</string>
     <string name="saw_missed">Reached the %1$d fps target %2$d%% of the time.</string>
@@ -508,7 +472,6 @@
     <string name="saw_reached">Reached %1$s.</string>
     <string name="suggest_dialog_title">Settings that fit this record</string>
     <string name="suggest_none">No better setting was found.</string>
-    <string name="suggest_footer">Based on games that behaved like this one. More recorded sessions make suggestions more accurate.</string>
     <string name="suggest_name">%1$s · %2$s</string>
     <string name="closest_setting">Closest setting · %1$s</string>
     <string name="kind_yours">Your preset</string>
@@ -534,14 +497,11 @@
 
     <!-- Adjust automatically -->
     <string name="auto_title">Adjust automatically</string>
-    <string name="auto_sub">Changes one thing per session so you can see what helped. Nothing changes until you apply.</string>
     <string name="auto_change_to">Change to %1$s</string>
     <string name="auto_fits">Your current setting already fits this record.</string>
-    <string name="auto_after">Play again with recording on. After 2–3 more sessions the setting settles.</string>
+    <string name="auto_after">Play again with recording on.</string>
     <string name="auto_where_change">Change %1$s</string>
-    <string name="auto_where_change_note">You can go back to the last stable setting later.</string>
     <string name="save_as_new_preset_long">Save as a new preset</string>
-    <string name="auto_where_new_note">Keeps %1$s as it is.</string>
     <string name="auto_based_on">Based on %1$s.</string>
     <string name="record_short">the record from %1$s with %2$s</string>
     <string name="goal_word_frames">smoother</string>

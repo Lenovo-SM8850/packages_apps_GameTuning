@@ -157,7 +157,6 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                     ) {
                         Icon(Icons.Rounded.Add, null); Text(stringResource(R.string.new_preset), Modifier.padding(start = 12.dp))
                     }
-                    Muted(stringResource(R.string.presets_note_short), Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
                 }
                 Surface(Modifier.weight(1f).fillMaxSize(), RoundedCornerShape(28.dp), MaterialTheme.colorScheme.surfaceContainerLow) {
                     PresetDetail(vm, nav, ps, mode, sel, lib.inUseId, onDelete = { deleteId = it })
@@ -166,7 +165,7 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
         } else {
             Box(Modifier.fillMaxSize()) {
                 Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp)
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp)
                         .widthIn(max = 640.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
@@ -202,7 +201,6 @@ fun PresetsScreen(vm: AppViewModel, nav: Nav, pkg: String, startMode: Int, wide:
                             }
                         }
                     }
-                    Muted(stringResource(R.string.presets_note), Modifier.padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 96.dp))
                 }
                 ExtendedFloatingActionButton(
                     onClick = { if (count < MAX_PRESETS) newSheet = true else Unit },
@@ -265,7 +263,6 @@ private fun NewPresetSheet(vm: AppViewModel, pkg: String, mode: Int, inUse: Pres
                 }
             }
             NameField(name, { name = it }, Modifier.fillMaxWidth())
-            Muted(stringResource(R.string.new_preset_note))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onClose, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
                 Button(onClick = { vm.createPreset(pkg, mode, name, fromBuiltin || inUse == null); onClose() }, Modifier.heightIn(min = 48.dp), enabled = name.isNotBlank()) {
@@ -308,9 +305,8 @@ private fun PresetActionsSheet(
                         vm.renamePreset(ps.pkg, mode, preset.id, name); onClose()
                     }
                 }
-                Muted(stringResource(R.string.name_note), Modifier.padding(horizontal = 24.dp))
             }
-            ActionRow(Icons.Rounded.Tune, stringResource(if (inUse) R.string.edit_tuning else R.string.use_and_edit), if (inUse) stringResource(R.string.preset_in_use_note) else null) {
+            ActionRow(Icons.Rounded.Tune, stringResource(if (inUse) R.string.edit_tuning else R.string.use_and_edit), null) {
                 onClose()
                 if (inUse) nav.push(Route.Tuning(ps.pkg, mode)) else vm.usePreset(ps.pkg, mode, preset?.id) { nav.push(Route.Tuning(ps.pkg, mode)) }
             }
@@ -318,7 +314,7 @@ private fun PresetActionsSheet(
                 ActionRow(Icons.Rounded.ContentCopy, stringResource(R.string.duplicate), stringResource(R.string.duplicate_note, stringResource(R.string.name_copy, preset.name))) {
                     vm.duplicatePreset(ps.pkg, mode, preset.id); onClose()
                 }
-                ActionRow(Icons.Rounded.East, stringResource(R.string.copy_to), stringResource(R.string.choose_several)) {
+                ActionRow(Icons.Rounded.East, stringResource(R.string.copy_to), null) {
                     onClose(); nav.push(Route.Copy(ps.pkg, mode, preset.id))
                 }
             }

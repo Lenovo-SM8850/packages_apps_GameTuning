@@ -183,7 +183,7 @@ fun <T> ConnectedChoice(
 @Composable
 fun SwitchRow(
     title: String, description: String?, checked: Boolean, onChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier, enabled: Boolean = true, minHeight: Dp = 72.dp,
+    modifier: Modifier = Modifier, enabled: Boolean = true, minHeight: Dp = if (description == null) 56.dp else 72.dp,
     padding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
 ) {
     Row(
@@ -204,7 +204,7 @@ fun SwitchRow(
 @Composable
 fun NavRow(
     title: String, description: String?, onClick: () -> Unit, modifier: Modifier = Modifier,
-    value: String? = null, icon: ImageVector? = null, enabled: Boolean = true, minHeight: Dp = 72.dp,
+    value: String? = null, icon: ImageVector? = null, enabled: Boolean = true, minHeight: Dp = if (description == null) 56.dp else 72.dp,
     padding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
 ) {
     Row(
@@ -363,13 +363,13 @@ fun ExactStepDialog(
 
 @Composable
 fun ConfirmDialog(
-    title: String, body: String, confirm: String, destructive: Boolean = false,
+    title: String, body: String?, confirm: String, destructive: Boolean = false,
     onConfirm: () -> Unit, onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = { Text(body) },
+        text = if (body != null) ({ Text(body) }) else null,
         confirmButton = {
             TextButton(onClick = { onConfirm(); onDismiss() }) {
                 Text(confirm, color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
